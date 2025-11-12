@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Module 3 - Gallery{% endblock %}
+{% block head %}
+  <style>
+    .container-narrow { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+    section { margin-bottom: 1.5rem; }
+    h2 { border-bottom: 1px solid #eee; padding-bottom: 4px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 8px; background: #fff; }
+    .card img { width: 100%; height: auto; border-radius: 6px; }
+    .name { font-size: 0.85rem; margin-top: 6px; color: #333; }
+    a.inline-link { text-decoration: none; color: #0069c2; }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="container-narrow">
+    <h1 class="h3 my-3">Module 3 Gallery</h1>
+
+  {% for part, items in results.items() %}
+    <section>
+      <h2>{{ part | capitalize }}</h2>
+      {% if items %}
+      <div class="grid">
+        {% for item in items %}
+        <div class="card">
+          <a href="{{ item.url }}" target="_blank" rel="noopener">
+            <img src="{{ item.url }}" alt="{{ item.name }}" />
+          </a>
+          <div class="name">{{ item.name }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p>No items yet for {{ part }}.</p>
+      {% endif %}
+    </section>
+  {% endfor %}
+
+  <p><a class="inline-link" href="/module3">← Back to Module 3</a></p>
+  </div>
+{% endblock %}

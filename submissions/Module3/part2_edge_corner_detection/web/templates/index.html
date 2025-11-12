@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Part 2: Edge & Corner Detection</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>Part 2: Edge & Corner Detection</h1>
+  <p>Edge keypoints detected using <strong>Canny edge detection</strong> (green).</p>
+  <p>Corner keypoints detected using <strong>Harris corner detection</strong> (red).</p>
+  
+  <h2>Dataset Images</h2>
+  <ul class="image-list">
+    {% for name in images %}
+      <li><a href="/image/{{name}}">{{name}}</a></li>
+    {% else %}
+      <li>No images found. Run the processor to generate synthetic examples.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

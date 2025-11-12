@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Server Error{% endblock %}
+{% block head %}
+  <style> .container-narrow { max-width: 900px; margin: 20px auto; padding: 0 16px; } a.inline-link { color: #0069c2; text-decoration: none; } </style>
+{% endblock %}
+{% block content %}
+  <div class="container-narrow">
+    <h1 class="h3 my-3">500 - Something went wrong</h1>
+    <p>There was an internal server error. Return to the <a class="inline-link" href="/module3">Module 3 home</a> and try again.</p>
+  </div>
+{% endblock %}

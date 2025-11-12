@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{name}} - Edge & Corner Detection</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a href="/">← Back</a>
+  <h1>{{name}}</h1>
+  
+  <div class="grid">
+    <div>
+      <h3>Original</h3>
+      <img src="{{paths.original}}" alt="original"/>
+    </div>
+    <div>
+      <h3>Edge Keypoints (Canny)</h3>
+      <p style="font-size: 0.9em; color: #0a0;">Green markers = detected edges</p>
+      <img src="{{paths.edges}}" alt="edges"/>
+    </div>
+    <div>
+      <h3>Corner Keypoints (Harris)</h3>
+      <p style="font-size: 0.9em; color: #a00;">Red markers = detected corners</p>
+      <img src="{{paths.corners}}" alt="corners"/>
+    </div>
+    <div>
+      <h3>Combined Detection</h3>
+      <p style="font-size: 0.9em;">Green = edges, Red = corners</p>
+      <img src="{{paths.combined}}" alt="combined"/>
+    </div>
+  </div>
+  
+  <h2>Side-by-side Comparison</h2>
+  <img src="{{paths.comparison}}" alt="comparison" style="width: 100%; max-width: 1400px;"/>
+  
+  <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+    <h3>Algorithm Details</h3>
+    <p><strong>Edge Detection (Canny):</strong></p>
+    <ol style="margin: 5px 0 15px 20px;">
+      <li>Gaussian blur to reduce noise</li>
+      <li>Compute gradient magnitude and direction (Sobel)</li>
+      <li>Non-maximum suppression to thin edges</li>
+      <li>Double threshold (low=50, high=150)</li>
+      <li>Edge tracking by hysteresis</li>
+    </ol>
+    
+    <p><strong>Corner Detection (Harris):</strong></p>
+    <ol style="margin: 5px 0 0 20px;">
+      <li>Compute image gradients Ix and Iy</li>
+      <li>Compute structure tensor M from Ix², Iy², Ix·Iy</li>
+      <li>Calculate corner response R = det(M) - k·trace(M)²</li>
+      <li>Threshold (1% of max response)</li>
+      <li>Non-maximum suppression for local maxima</li>
+    </ol>
+  </div>
+</body>
+</html>

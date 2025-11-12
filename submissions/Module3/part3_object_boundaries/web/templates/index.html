@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Part 3: Object Boundary Detection</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>Part 3: Object Boundary Detection</h1>
+  <p>Finding exact object boundaries using classical computer vision techniques (no ML/DL).</p>
+  
+  <div style="background: #f0f8ff; padding: 15px; margin: 20px 0; border-radius: 5px; border-left: 4px solid #0066cc;">
+    <h3 style="margin-top: 0;">Methods Implemented:</h3>
+    <ul>
+      <li><strong>Contour Detection:</strong> Otsu thresholding + morphological operations + contour finding</li>
+      <li><strong>GrabCut Segmentation:</strong> Iterative graph-cut based foreground/background separation</li>
+      <li><strong>Boundary Shapes:</strong> Bounding box, convex hull, minimum enclosing circle, fitted ellipse</li>
+    </ul>
+  </div>
+  
+  <h2>Dataset Images</h2>
+  <ul class="image-list">
+    {% for name in images %}
+      <li><a href="/image/{{name}}">{{name}}</a></li>
+    {% else %}
+      <li>No images found. Run the processor to generate synthetic examples.</li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

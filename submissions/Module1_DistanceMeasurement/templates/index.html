@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">
+                        <i class="fas fa-ruler-combined me-3"></i>
+                        Real-world Distance Measurement
+                    </h2>
+                    <p class="mb-0 mt-2">Using Perspective Projection and Camera Calibration</p>
+                </div>
+                <div class="card-body">
+                    <!-- Introduction -->
+                    <div class="alert alert-info">
+                        <h5><i class="fas fa-info-circle me-2"></i>How it works:</h5>
+                        <p class="mb-0">
+                            This application uses <strong>perspective projection mathematics</strong> and pre-calibrated 
+                            <strong>camera intrinsic parameters</strong> to convert pixel coordinates into real-world distances.
+                            Simply click two points on an image to measure the actual distance between them in centimeters.
+                        </p>
+                    </div>
+
+                    <!-- Camera Calibration Display -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-primary">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-camera me-2"></i>Camera Calibration Matrix</h5>
+                                </div>
+                                <div class="card-body" id="calibration-info">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Loading...</span>
+                                        </div>
+                                        Loading calibration data...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-calculator me-2"></i>Mathematical Formula</h5>
+                                </div>
+                                <div class="card-body">
+                                    <code>
+                                        X_real = (x_pixel - Ox) × Z / Fx<br>
+                                        Y_real = (y_pixel - Oy) × Z / Fy<br>
+                                        Distance = √(ΔX² + ΔY²)
+                                    </code>
+                                    <p class="mt-2 mb-0 small text-muted">
+                                        Where Z is depth, (Fx,Fy) are focal lengths, and (Ox,Oy) is the principal point.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Instructions and Test -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <div class="card border-info">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-list-ol me-2"></i>Instructions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ol class="mb-0">
+                                        <li><strong>Upload an image</strong> using the file selector below</li>
+                                        <li><strong>Set the Z-distance</strong> (camera to object distance in cm)</li>
+                                        <li><strong>Click two points</strong> on the uploaded image</li>
+                                        <li><strong>Click "Measure Distance"</strong> to calculate real-world distance</li>
+                                    </ol>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card border-warning">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-flask me-2"></i>Test API</h5>
+                                </div>
+                                <div class="card-body text-center">
+                                    <button class="btn btn-outline-warning" onclick="testAPI()">
+                                        <i class="fas fa-vial me-2"></i>Test Connection
+                                    </button>
+                                    <p class="mt-2 mb-0 small text-muted">Verify Flask API is working</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Z-Distance Input -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <label for="zDistance" class="form-label">
+                                <strong><i class="fas fa-arrows-alt-v me-2"></i>Camera to Object Distance (Z-depth in cm):</strong>
+                            </label>
+                            <input type="number" class="form-control" id="zDistance" 
+                                   value="100" min="10" max="1000" step="5">
+                            <div class="form-text">
+                                <i class="fas fa-info me-1"></i>
+                                This is the perpendicular distance from the camera to the object plane in centimeters
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Upload Section -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="drag-drop-area p-4 text-center" id="dragDropArea" 
+                                 style="border: 3px dashed #007bff; background: #f8f9fa;">
+                                <i class="fas fa-cloud-upload-alt fa-4x text-primary mb-3"></i>
+                                <h5>Upload Your Image</h5>
+                                <p class="mb-3">Drag & drop an image here or click to browse</p>
+                                <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                                <button class="btn btn-primary btn-lg" onclick="document.getElementById('imageInput').click()">
+                                    <i class="fas fa-folder-open me-2"></i>Choose Image File
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Display and Point Selection -->
+                    <div class="row mb-4" id="imageSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5><i class="fas fa-mouse-pointer me-2"></i>Click Two Points to Measure Distance</h5>
+                                    <div class="btn-toolbar justify-content-between">
+                                        <div class="btn-group">
+                                            <button class="btn btn-outline-light btn-sm" onclick="clearPoints()">
+                                                <i class="fas fa-eraser me-1"></i>Clear Points
+                                            </button>
+                                            <button class="btn btn-warning btn-sm" id="measureButton" disabled onclick="measureDistance()">
+                                                <i class="fas fa-ruler me-1"></i>Measure Distance
+                                            </button>
+                                        </div>
+                                        <small class="text-light">Green = Point 1, Red = Point 2</small>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="text-center">
+                                        <canvas id="imageCanvas" 
+                                                style="max-width: 100%; cursor: crosshair; border: 3px solid #28a745; border-radius: 10px;"></canvas>
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <span class="badge bg-success me-2">Point 1:</span>
+                                                <span id="point1Display">Not selected</span>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <span class="badge bg-danger me-2">Point 2:</span>
+                                                <span id="point2Display">Not selected</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Section -->
+                    <div class="row" id="resultsSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card border-warning">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5><i class="fas fa-chart-line me-2"></i>Measurement Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-image me-2"></i>Processed Image</h6>
+                                            <canvas id="resultCanvas" 
+                                                    style="max-width: 100%; border: 2px solid #ffc107; border-radius: 10px;"></canvas>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6><i class="fas fa-table me-2"></i>Distance Calculations</h6>
+                                            <div id="measurementData"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let uploadedImage = null;
+let uploadedFile = null;
+let canvas = null;
+let ctx = null;
+let points = [];
+let calibrationData = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📐 Module 1 Distance Measurement App Initialized');
+    
+    // Load calibration data
+    loadCalibrationData();
+    
+    // Setup canvas
+    canvas = document.getElementById('imageCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // Setup file input
+    document.getElementById('imageInput').addEventListener('change', handleFileSelect);
+    
+    // Setup canvas click handler
+    canvas.addEventListener('click', handleCanvasClick);
+});
+
+function loadCalibrationData() {
+    console.log('📷 Loading camera calibration data...');
+    fetch('/api/calibration')
+        .then(response => {
+            console.log('📷 Calibration response:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('📷 Calibration data received:', data);
+            calibrationData = data;
+            displayCalibrationData(data);
+        })
+        .catch(error => {
+            console.error('❌ Calibration loading error:', error);
+            document.getElementById('calibration-info').innerHTML = 
+                '<div class="text-danger"><i class="fas fa-exclamation-triangle me-2"></i>Error: ' + error.message + '</div>';
+        });
+}
+
+function displayCalibrationData(data) {
+    document.getElementById('calibration-info').innerHTML = 
+        '<div class="row small">' +
+        '<div class="col-6"><strong>Fx:</strong> ' + data.Fx.toFixed(3) + '</div>' +
+        '<div class="col-6"><strong>Fy:</strong> ' + data.Fy.toFixed(3) + '</div>' +
+        '<div class="col-6"><strong>Ox:</strong> ' + data.Ox.toFixed(3) + '</div>' +
+        '<div class="col-6"><strong>Oy:</strong> ' + data.Oy.toFixed(3) + '</div>' +
+        '</div>' +
+        '<small class="text-muted d-block mt-2">✓ Camera intrinsic parameters loaded successfully</small>';
+}
+
+function testAPI() {
+    console.log('🧪 Testing API connection...');
+    fetch('/api/test')
+        .then(response => response.json())
+        .then(data => {
+            console.log('✅ API test successful:', data);
+            alert('🎉 API Connection Successful!\n\n' + data.message + '\nVersion: ' + data.version);
+        })
+        .catch(error => {
+            console.error('❌ API test failed:', error);
+            alert('❌ API Test Failed: ' + error.message);
+        });
+}
+
+function handleFileSelect(e) {
+    if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+    }
+}
+
+function handleFile(file) {
+    if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file');
+        return;
+    }
+    
+    console.log('🖼️ Loading image:', file.name);
+    uploadedFile = file;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        uploadedImage = new Image();
+        uploadedImage.onload = function() {
+            console.log('✅ Image loaded:', uploadedImage.width + 'x' + uploadedImage.height);
+            displayImage();
+            document.getElementById('imageSection').style.display = 'block';
+            clearPoints();
+        };
+        uploadedImage.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function displayImage() {
+    const maxWidth = 900;
+    const scale = Math.min(1, maxWidth / uploadedImage.width);
+    canvas.width = uploadedImage.width * scale;
+    canvas.height = uploadedImage.height * scale;
+    
+    ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
+}
+
+function handleCanvasClick(e) {
+    if (points.length >= 2) {
+        alert('Maximum 2 points allowed. Click "Clear Points" to start over.');
+        return;
+    }
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    points.push({x: x, y: y});
+    console.log(`📍 Point ${points.length} selected: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+    
+    // Draw point
+    ctx.fillStyle = points.length === 1 ? '#28a745' : '#dc3545';  // Green for P1, Red for P2
+    ctx.beginPath();
+    ctx.arc(x, y, 8, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Draw point border
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    updatePointDisplay();
+    
+    // Draw line if we have 2 points
+    if (points.length === 2) {
+        document.getElementById('measureButton').disabled = false;
+        
+        ctx.strokeStyle = '#007bff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        ctx.lineTo(points[1].x, points[1].y);
+        ctx.stroke();
+        
+        console.log('✅ Two points selected, measurement ready');
+    }
+}
+
+function updatePointDisplay() {
+    document.getElementById('point1Display').textContent = 
+        points.length >= 1 ? `(${points[0].x.toFixed(1)}, ${points[0].y.toFixed(1)})` : 'Not selected';
+    document.getElementById('point2Display').textContent = 
+        points.length >= 2 ? `(${points[1].x.toFixed(1)}, ${points[1].y.toFixed(1)})` : 'Not selected';
+}
+
+function clearPoints() {
+    console.log('🧹 Clearing points');
+    points = [];
+    if (uploadedImage) {
+        displayImage();
+    }
+    updatePointDisplay();
+    document.getElementById('measureButton').disabled = true;
+    document.getElementById('resultsSection').style.display = 'none';
+}
+
+function measureDistance() {
+    console.log('📏 Starting distance measurement...');
+    
+    if (points.length !== 2 || !uploadedFile) {
+        alert('Please select 2 points and upload an image first');
+        return;
+    }
+    
+    // Prepare form data
+    const formData = new FormData();
+    formData.append('image', uploadedFile);
+    
+    // Scale points back to original image coordinates
+    const scaleX = uploadedImage.width / canvas.width;
+    const scaleY = uploadedImage.height / canvas.height;
+    
+    const point1_x = points[0].x * scaleX;
+    const point1_y = points[0].y * scaleY;
+    const point2_x = points[1].x * scaleX;
+    const point2_y = points[1].y * scaleY;
+    const z_distance = document.getElementById('zDistance').value;
+    
+    formData.append('point1_x', point1_x);
+    formData.append('point1_y', point1_y);
+    formData.append('point2_x', point2_x);
+    formData.append('point2_y', point2_y);
+    formData.append('z_distance', z_distance);
+    
+    console.log(`📊 Measurement parameters: P1(${point1_x.toFixed(1)}, ${point1_y.toFixed(1)}) P2(${point2_x.toFixed(1)}, ${point2_y.toFixed(1)}) Z=${z_distance}cm`);
+    
+    // Show loading state
+    document.getElementById('measureButton').innerHTML = 
+        '<i class="fas fa-spinner fa-spin me-1"></i>Calculating...';
+    document.getElementById('measureButton').disabled = true;
+    
+    // Send to server
+    fetch('/api/distance-measurement', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('📡 Server response:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('📊 Measurement result:', data);
+        
+        // Reset button
+        document.getElementById('measureButton').innerHTML = 
+            '<i class="fas fa-ruler me-1"></i>Measure Distance';
+        document.getElementById('measureButton').disabled = false;
+        
+        if (data.success) {
+            displayResults(data);
+        } else {
+            alert('❌ Measurement Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('❌ Measurement error:', error);
+        
+        // Reset button
+        document.getElementById('measureButton').innerHTML = 
+            '<i class="fas fa-ruler me-1"></i>Measure Distance';
+        document.getElementById('measureButton').disabled = false;
+        
+        alert('❌ Network Error: ' + error.message);
+    });
+}
+
+function displayResults(data) {
+    console.log('🎯 Displaying results');
+    
+    // Display result image
+    const resultCanvas = document.getElementById('resultCanvas');
+    const resultCtx = resultCanvas.getContext('2d');
+    
+    const resultImage = new Image();
+    resultImage.onload = function() {
+        const maxWidth = 450;
+        const scale = Math.min(1, maxWidth / resultImage.width);
+        resultCanvas.width = resultImage.width * scale;
+        resultCanvas.height = resultImage.height * scale;
+        
+        resultCtx.drawImage(resultImage, 0, 0, resultCanvas.width, resultCanvas.height);
+    };
+    resultImage.src = data.processed_image;
+    
+    // Display measurement data
+    document.getElementById('measurementData').innerHTML = 
+        '<div class="table-responsive">' +
+        '<table class="table table-sm table-bordered">' +
+        '<thead class="table-dark">' +
+        '<tr><th>Measurement</th><th>Value</th></tr>' +
+        '</thead>' +
+        '<tbody>' +
+        '<tr><td><i class="fas fa-arrows-alt-h me-1"></i><strong>X Distance</strong></td>' +
+        '<td>' + data.measurements.x_distance.toFixed(2) + ' cm</td></tr>' +
+        '<tr><td><i class="fas fa-arrows-alt-v me-1"></i><strong>Y Distance</strong></td>' +
+        '<td>' + data.measurements.y_distance.toFixed(2) + ' cm</td></tr>' +
+        '<tr class="table-warning"><td><i class="fas fa-ruler me-1"></i><strong>Euclidean Distance</strong></td>' +
+        '<td><strong>' + data.measurements.euclidean_distance.toFixed(2) + ' cm</strong></td></tr>' +
+        '<tr><td><i class="fas fa-camera me-1"></i><strong>Z Distance Used</strong></td>' +
+        '<td>' + data.z_distance_used + ' cm</td></tr>' +
+        '</tbody>' +
+        '</table>' +
+        '</div>' +
+        
+        '<div class="mt-3">' +
+        '<h6><i class="fas fa-map-marker-alt me-2"></i>Real World Coordinates:</h6>' +
+        '<div class="row">' +
+        '<div class="col-6">' +
+        '<span class="badge bg-success">P1:</span> ' +
+        '(' + data.measurements.point1_real[0].toFixed(2) + ', ' + data.measurements.point1_real[1].toFixed(2) + ') cm' +
+        '</div>' +
+        '<div class="col-6">' +
+        '<span class="badge bg-danger">P2:</span> ' +
+        '(' + data.measurements.point2_real[0].toFixed(2) + ', ' + data.measurements.point2_real[1].toFixed(2) + ') cm' +
+        '</div>' +
+        '</div>' +
+        '</div>';
+    
+    document.getElementById('resultsSection').style.display = 'block';
+    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+    
+    console.log('✅ Results displayed successfully');
+}
+</script>
+{% endblock %}

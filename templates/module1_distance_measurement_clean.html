@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Module 1 - Distance Measurement{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">
+                        <i class="fas fa-ruler-combined"></i>
+                        Module 1: Real-world Distance Measurement
+                    </h3>
+                    <small>Using Perspective Projection and Camera Calibration</small>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>How it works:</strong> Click two points on an image to measure the real-world distance between them.
+                        The system uses pre-calibrated camera intrinsic parameters and perspective projection formulas.
+                    </div>
+
+                    <!-- Camera Calibration Info -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-secondary">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-camera"></i> Camera Calibration</h5>
+                                </div>
+                                <div class="card-body" id="calibration-info">
+                                    <div class="text-center">
+                                        <div class="spinner-border spinner-border-sm" role="status">
+                                            <span class="visually-hidden">Loading calibration...</span>
+                                        </div>
+                                        Loading calibration data...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-info">
+                                <div class="card-header">
+                                    <h5><i class="fas fa-info-circle"></i> Instructions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ol>
+                                        <li>Upload an image</li>
+                                        <li>Set the camera-to-object distance (Z)</li>
+                                        <li>Click two points on the image</li>
+                                        <li>View the real-world distance measurement</li>
+                                    </ol>
+                                    <button class="btn btn-outline-primary btn-sm" onclick="testAPI()">Test API Connection</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Distance Input -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <label for="zDistance" class="form-label">
+                                <strong>Camera to Object Distance (Z) in cm:</strong>
+                            </label>
+                            <input type="number" class="form-control" id="zDistance" 
+                                   value="100" min="10" max="1000" step="5">
+                            <div class="form-text">Enter the real-world distance from camera to the objects in the image (centimeters)</div>
+                        </div>
+                    </div>
+
+                    <!-- Image Upload -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="drag-drop-area" id="dragDropArea" style="border: 2px dashed #007bff; padding: 20px; text-align: center;">
+                                <div class="p-4">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <p class="mb-2">Drag & drop an image here or click to browse</p>
+                                    <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                                    <button class="btn btn-outline-primary" onclick="document.getElementById('imageInput').click()">
+                                        Choose Image
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Image Display and Point Selection -->
+                    <div class="row mb-4" id="imageSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Click Two Points to Measure Distance</h5>
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-danger" onclick="clearPoints()">Clear Points</button>
+                                        <button class="btn btn-sm btn-success" id="measureButton" disabled onclick="measureDistance()">Measure Distance</button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="text-center">
+                                        <canvas id="imageCanvas" style="max-width: 100%; cursor: crosshair; border: 2px solid #dee2e6;"></canvas>
+                                    </div>
+                                    <div class="mt-3">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <strong>Point 1:</strong> <span id="point1Display">Not selected</span>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <strong>Point 2:</strong> <span id="point2Display">Not selected</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <div class="row" id="resultsSection" style="display: none;">
+                        <div class="col-12">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h5><i class="fas fa-chart-line"></i> Measurement Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <canvas id="resultCanvas" style="max-width: 100%; border: 1px solid #dee2e6;"></canvas>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div id="measurementData"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Global variables
+let uploadedImage = null;
+let uploadedFile = null;
+let canvas = null;
+let ctx = null;
+let points = [];
+let calibrationData = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM loaded, initializing...');
+    
+    // Load calibration data
+    loadCalibrationData();
+    
+    // Setup canvas
+    canvas = document.getElementById('imageCanvas');
+    ctx = canvas.getContext('2d');
+    
+    // Setup file input
+    document.getElementById('imageInput').addEventListener('change', handleFileSelect);
+    
+    // Setup canvas click handler
+    canvas.addEventListener('click', handleCanvasClick);
+});
+
+function loadCalibrationData() {
+    console.log('Loading calibration data...');
+    fetch('/api/calibration')
+        .then(response => {
+            console.log('Calibration response:', response.status);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Calibration data:', data);
+            calibrationData = data;
+            displayCalibrationData(data);
+        })
+        .catch(error => {
+            console.error('Calibration error:', error);
+            document.getElementById('calibration-info').innerHTML = 
+                '<div class="text-danger">Error: ' + error.message + '</div>';
+        });
+}
+
+function displayCalibrationData(data) {
+    document.getElementById('calibration-info').innerHTML = 
+        '<div class="row">' +
+        '<div class="col-6"><strong>Fx:</strong> ' + data.Fx.toFixed(2) + '</div>' +
+        '<div class="col-6"><strong>Fy:</strong> ' + data.Fy.toFixed(2) + '</div>' +
+        '<div class="col-6"><strong>Ox:</strong> ' + data.Ox.toFixed(2) + '</div>' +
+        '<div class="col-6"><strong>Oy:</strong> ' + data.Oy.toFixed(2) + '</div>' +
+        '</div>';
+}
+
+function testAPI() {
+    console.log('Testing API...');
+    fetch('/api/test')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Test successful:', data);
+            alert('API Test Success: ' + data.message);
+        })
+        .catch(error => {
+            console.error('Test failed:', error);
+            alert('API Test Failed: ' + error.message);
+        });
+}
+
+function handleFileSelect(e) {
+    if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+    }
+}
+
+function handleFile(file) {
+    if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        return;
+    }
+    
+    uploadedFile = file;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        uploadedImage = new Image();
+        uploadedImage.onload = function() {
+            displayImage();
+            document.getElementById('imageSection').style.display = 'block';
+            clearPoints();
+        };
+        uploadedImage.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+function displayImage() {
+    const maxWidth = 800;
+    const scale = Math.min(1, maxWidth / uploadedImage.width);
+    canvas.width = uploadedImage.width * scale;
+    canvas.height = uploadedImage.height * scale;
+    
+    ctx.drawImage(uploadedImage, 0, 0, canvas.width, canvas.height);
+}
+
+function handleCanvasClick(e) {
+    if (points.length >= 2) {
+        return;
+    }
+    
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
+    
+    points.push({x: x, y: y});
+    
+    ctx.fillStyle = points.length === 1 ? 'green' : 'red';
+    ctx.beginPath();
+    ctx.arc(x, y, 5, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    updatePointDisplay();
+    
+    if (points.length === 2) {
+        document.getElementById('measureButton').disabled = false;
+        
+        ctx.strokeStyle = 'blue';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        ctx.lineTo(points[1].x, points[1].y);
+        ctx.stroke();
+    }
+}
+
+function updatePointDisplay() {
+    document.getElementById('point1Display').textContent = 
+        points.length >= 1 ? '(' + points[0].x.toFixed(1) + ', ' + points[0].y.toFixed(1) + ')' : 'Not selected';
+    document.getElementById('point2Display').textContent = 
+        points.length >= 2 ? '(' + points[1].x.toFixed(1) + ', ' + points[1].y.toFixed(1) + ')' : 'Not selected';
+}
+
+function clearPoints() {
+    points = [];
+    if (uploadedImage) {
+        displayImage();
+    }
+    updatePointDisplay();
+    document.getElementById('measureButton').disabled = true;
+    document.getElementById('resultsSection').style.display = 'none';
+}
+
+function measureDistance() {
+    console.log('Measuring distance...');
+    
+    if (points.length !== 2 || !uploadedFile) {
+        alert('Please select 2 points and upload an image');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', uploadedFile);
+    
+    const scaleX = uploadedImage.width / canvas.width;
+    const scaleY = uploadedImage.height / canvas.height;
+    
+    formData.append('point1_x', points[0].x * scaleX);
+    formData.append('point1_y', points[0].y * scaleY);
+    formData.append('point2_x', points[1].x * scaleX);
+    formData.append('point2_y', points[1].y * scaleY);
+    formData.append('z_distance', document.getElementById('zDistance').value);
+    
+    console.log('Sending measurement request...');
+    
+    fetch('/api/distance-measurement', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        console.log('Response status:', response.status);
+        return response.json();
+    })
+    .then(data => {
+        console.log('Measurement result:', data);
+        if (data.success) {
+            displayResults(data);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Measurement error:', error);
+        alert('Error: ' + error.message);
+    });
+}
+
+function displayResults(data) {
+    const resultCanvas = document.getElementById('resultCanvas');
+    const resultCtx = resultCanvas.getContext('2d');
+    
+    const resultImage = new Image();
+    resultImage.onload = function() {
+        const maxWidth = 400;
+        const scale = Math.min(1, maxWidth / resultImage.width);
+        resultCanvas.width = resultImage.width * scale;
+        resultCanvas.height = resultImage.height * scale;
+        
+        resultCtx.drawImage(resultImage, 0, 0, resultCanvas.width, resultCanvas.height);
+    };
+    resultImage.src = data.processed_image;
+    
+    document.getElementById('measurementData').innerHTML = 
+        '<h6>Distance Measurements:</h6>' +
+        '<table class="table table-sm">' +
+        '<tr><td><strong>X Distance:</strong></td><td>' + data.measurements.x_distance.toFixed(2) + ' cm</td></tr>' +
+        '<tr><td><strong>Y Distance:</strong></td><td>' + data.measurements.y_distance.toFixed(2) + ' cm</td></tr>' +
+        '<tr class="table-success"><td><strong>Euclidean Distance:</strong></td><td>' + data.measurements.euclidean_distance.toFixed(2) + ' cm</td></tr>' +
+        '<tr><td><strong>Z Distance Used:</strong></td><td>' + data.z_distance_used + ' cm</td></tr>' +
+        '</table>';
+    
+    document.getElementById('resultsSection').style.display = 'block';
+}
+</script>
+{% endblock %}

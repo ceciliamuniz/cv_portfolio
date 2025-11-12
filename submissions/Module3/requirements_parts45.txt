@@ -1,0 +1,32 @@
+# Computer Vision Module 3 - Parts 4 & 5
+# ArUco Marker-Based Segmentation and SAM2 Comparison
+
+## Requirements for Parts 4 & 5
+
+# Core dependencies (already installed)
+opencv-python>=4.8.0
+opencv-contrib-python>=4.8.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# Part 4: ArUco Segmentation
+# Optional for alpha-shape segmentation
+scipy>=1.10.0
+
+# Part 5: SAM2 Comparison
+# PyTorch (choose appropriate version for your system)
+# For CUDA 11.8:
+# torch>=2.0.0
+# torchvision>=0.15.0
+
+# For CPU only:
+torch>=2.0.0
+torchvision>=0.15.0
+
+# SAM2 (Segment Anything Model 2)
+# Install from GitHub:
+# pip install git+https://github.com/facebookresearch/segment-anything-2.git
+
+# Additional utilities
+Pillow>=10.0.0
+tqdm>=4.65.0

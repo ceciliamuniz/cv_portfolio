@@ -1,0 +1,95 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{name}} - Object Boundaries</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a href="/">← Back</a>
+  <h1>{{name}}</h1>
+  
+  <div class="grid">
+    <div>
+      <h3>Original Image</h3>
+      <img src="{{paths.original}}" alt="original"/>
+    </div>
+    
+    <div>
+      <h3>Contour Detection</h3>
+      <p style="font-size: 0.9em; color: #060;">
+        <strong>Green:</strong> Contour outline<br>
+        <strong>Blue:</strong> Bounding rectangle<br>
+        <strong>Cyan:</strong> Min enclosing circle<br>
+        <strong>Yellow:</strong> Convex hull
+      </p>
+      <img src="{{paths.contours}}" alt="contours"/>
+    </div>
+    
+    <div>
+      <h3>GrabCut Segmentation</h3>
+      <p style="font-size: 0.9em;">
+        Graph-cut based iterative segmentation with boundary visualization
+      </p>
+      <img src="{{paths.grabcut}}" alt="grabcut"/>
+    </div>
+    
+    <div>
+      <h3>Precise Boundaries</h3>
+      <p style="font-size: 0.9em;">
+        Exact boundary with metrics:<br>
+        Area, perimeter, centroid, fitted shapes
+      </p>
+      <img src="{{paths.boundaries}}" alt="boundaries"/>
+    </div>
+  </div>
+  
+  <h2>Complete Comparison</h2>
+  <img src="{{paths.comparison}}" alt="comparison" style="width: 100%; max-width: 1600px;"/>
+  
+  <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 5px;">
+    <h3>Algorithm Details</h3>
+    
+    <div style="margin-bottom: 20px;">
+      <h4>1. Contour-Based Boundary Detection</h4>
+      <ol style="margin: 5px 0 0 20px;">
+        <li>Convert to grayscale</li>
+        <li>Apply Otsu's automatic threshold (finds optimal threshold from histogram)</li>
+        <li>Morphological closing (fill small holes)</li>
+        <li>Morphological opening (remove small noise)</li>
+        <li>Find external contours using border following algorithm</li>
+        <li>Filter contours by minimum area</li>
+        <li>Compute bounding shapes (rectangle, circle, convex hull)</li>
+      </ol>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <h4>2. GrabCut Segmentation</h4>
+      <ol style="margin: 5px 0 0 20px;">
+        <li>Initialize rectangular ROI (assumes centered object)</li>
+        <li>Build Gaussian Mixture Models (GMMs) for foreground and background</li>
+        <li>Construct graph with pixel nodes and edge weights</li>
+        <li>Iteratively refine using min-cut/max-flow algorithm</li>
+        <li>Extract final foreground mask</li>
+        <li>Find contours from refined mask</li>
+      </ol>
+    </div>
+    
+    <div>
+      <h4>3. Boundary Metrics</h4>
+      <ul style="margin: 5px 0 0 20px;">
+        <li><strong>Area:</strong> Total pixels enclosed by boundary</li>
+        <li><strong>Perimeter:</strong> Total boundary length</li>
+        <li><strong>Bounding Box:</strong> Minimal axis-aligned rectangle</li>
+        <li><strong>Min Enclosing Circle:</strong> Smallest circle containing object</li>
+        <li><strong>Fitted Ellipse:</strong> Best-fit ellipse using least squares</li>
+        <li><strong>Centroid:</strong> Center of mass (geometric center)</li>
+      </ul>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 10px; background: #fff3cd; border-radius: 3px;">
+      <strong>Note:</strong> All methods are classical CV techniques. No machine learning or deep learning is used.
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Part 4: ArUco Marker-Based Segmentation</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <h1>Part 4: ArUco Marker-Based Object Segmentation</h1>
+  <p>Segment non-rectangular objects using ArUco markers placed on the boundary.</p>
+  
+  <div class="info-box">
+    <h3>📋 Assignment Instructions</h3>
+    <ol>
+      <li><strong>Generate markers:</strong> Run <code>python src/generate_markers.py</code> to create printable ArUco markers</li>
+      <li><strong>Print markers:</strong> Print the generated markers (in <code>data/markers/</code>)</li>
+      <li><strong>Attach to object:</strong> Stick 4-8 markers around the boundary of a non-rectangular object</li>
+      <li><strong>Capture images:</strong> Take 10+ photos from different angles and distances</li>
+      <li><strong>Save images:</strong> Place photos in <code>data/images/</code></li>
+      <li><strong>Process:</strong> Run <code>python src/process_dataset.py</code></li>
+      <li><strong>View results:</strong> Browse results in this web interface</li>
+    </ol>
+  </div>
+  
+  <div class="info-box" style="background: #fff3cd; border-left-color: #ff9800;">
+    <h3>⚙️ Current Status</h3>
+    <p><strong>Generated Markers:</strong> {% if num_markers > 0 %}{{ num_markers }} markers available{% else %}None - run generate_markers.py{% endif %}</p>
+    <p><strong>Dataset Images:</strong> {% if images|length > 0 %}{{ images|length }} images{% else %}None - add your captures or use synthetic test images{% endif %}</p>
+  </div>
+  
+  <h2>Dataset Images</h2>
+  {% if images|length > 0 %}
+    <ul class="image-list">
+      {% for name in images %}
+        <li><a href="/image/{{name}}">{{name}}</a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="warning">⚠️ No images found. Either:</p>
+    <ul>
+      <li>Add your captured images to <code>data/images/</code>, or</li>
+      <li>Run <code>python src/process_dataset.py</code> to generate synthetic test images</li>
+    </ul>
+  {% endif %}
+  
+  <div class="info-box" style="background: #e3f2fd; border-left-color: #2196f3; margin-top: 30px;">
+    <h3>📚 How ArUco Marker Detection Works</h3>
+    <p><strong>ArUco markers</strong> are square fiducial markers with binary patterns designed for fast, robust detection:</p>
+    <ol>
+      <li><strong>Detection:</strong> Find candidate quadrilaterals using edge/corner detection</li>
+      <li><strong>Perspective correction:</strong> Unwarp candidates to square using homography</li>
+      <li><strong>Bit extraction:</strong> Read binary pattern from corrected square</li>
+      <li><strong>Error correction:</strong> Validate pattern using Hamming code</li>
+      <li><strong>ID decoding:</strong> Match pattern to marker dictionary</li>
+    </ol>
+    <p><strong>Segmentation strategy:</strong> Use detected marker positions as boundary hints → create convex hull → refine with GrabCut → extract final boundary</p>
+  </div>
+</body>
+</html>

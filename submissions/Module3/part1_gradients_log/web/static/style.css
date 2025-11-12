@@ -1,0 +1,5 @@
+body { font-family: Arial, sans-serif; margin: 20px; }
+.image-list { list-style: none; padding: 0; }
+.image-list li { margin: 6px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+img { max-width: 100%; height: auto; border: 1px solid #ddd; }

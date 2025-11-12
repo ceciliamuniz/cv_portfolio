@@ -1,0 +1,4 @@
+/* Minimal styles to avoid 404 and provide a bit of polish */
+.nav-pill { text-decoration: none; }
+.part-card { transition: box-shadow .2s ease, transform .2s ease; }
+.part-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,.12); transform: translateY(-2px); }

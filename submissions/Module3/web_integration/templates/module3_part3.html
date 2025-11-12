@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block title %}Module 3 - Part 3: Boundaries{% endblock %}
+{% block head %}
+  <style>
+    .container-narrow { max-width: 1200px; margin: 20px auto; padding: 0 16px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 8px; background: #fff; }
+    .card img { width: 100%; height: auto; border-radius: 6px; }
+    .name { font-size: 0.9rem; margin-top: 6px; color: #333; }
+    a.inline-link { text-decoration: none; color: #0069c2; }
+  </style>
+{% endblock %}
+{% block content %}
+  <div class="container-narrow">
+    <h1 class="h3 my-3">Part 3: Object Boundaries</h1>
+    <p>Contours, convex hulls, and minAreaRect overlays.</p>
+    {% if images %}
+    <div class="grid">
+      {% for item in images %}
+      <div class="card">
+        <a href="{{ item.url }}" target="_blank" rel="noopener">
+          <img src="{{ item.url }}" alt="{{ item.name }}" />
+        </a>
+        <div class="name">{{ item.name }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p>No results yet. Run the processing pipeline to populate outputs.</p>
+    {% endif %}
+    <p class="mt-3"><a class="inline-link" href="/module3">← Back to Module 3</a></p>
+  </div>
+{% endblock %}

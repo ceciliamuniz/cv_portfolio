@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{name}} - ArUco Segmentation</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a href="/">← Back</a>
+  <h1>{{name}}</h1>
+  
+  <div class="grid">
+    <div>
+      <h3>Original Image</h3>
+      <img src="{{paths.original}}" alt="original"/>
+    </div>
+    
+    <div>
+      <h3>Detected ArUco Markers</h3>
+      <p style="font-size: 0.9em;">
+        Markers outlined with IDs shown.<br>
+        <span style="color: #0a0;">Green circles</span> = marker centers
+      </p>
+      <img src="{{paths.markers}}" alt="markers"/>
+    </div>
+    
+    <div>
+      <h3>Segmentation Result</h3>
+      <p style="font-size: 0.9em;">
+        <span style="color: #0a0;">Green overlay</span> = segmented object<br>
+        <span style="color: #f0f;">Magenta polygon</span> = marker convex hull<br>
+        <span style="color: #ff0;">Yellow dots</span> = marker positions
+      </p>
+      <img src="{{paths.segmentation}}" alt="segmentation"/>
+    </div>
+    
+    <div>
+      <h3>Boundary + Metrics</h3>
+      <p style="font-size: 0.9em;">
+        Final object boundary with measurements
+      </p>
+      <img src="{{paths.boundary}}" alt="boundary"/>
+    </div>
+  </div>
+  
+  <h2>Complete Processing Pipeline</h2>
+  <img src="{{paths.comparison}}" alt="comparison" style="width: 100%; max-width: 1800px;"/>
+  
+  <div style="margin-top: 30px; padding: 20px; background: #f5f5f5; border-radius: 5px;">
+    <h3>Processing Pipeline</h3>
+    
+    <div style="margin-bottom: 20px;">
+      <h4>1. ArUco Marker Detection</h4>
+      <ol style="margin: 5px 0 0 20px;">
+        <li>Convert image to grayscale</li>
+        <li>Apply adaptive thresholding</li>
+        <li>Find contours and filter quadrilaterals</li>
+        <li>Extract and unwarp candidate squares</li>
+        <li>Decode binary pattern and validate with error correction</li>
+        <li>Match to ArUco dictionary to get marker ID</li>
+        <li>Calculate corner positions and center coordinates</li>
+      </ol>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <h4>2. Marker-Based Object Segmentation</h4>
+      <ol style="margin: 5px 0 0 20px;">
+        <li>Extract marker center positions (Nx2 coordinates)</li>
+        <li>Compute convex hull from marker positions</li>
+        <li>Expand hull by 30% to ensure object coverage</li>
+        <li>Initialize segmentation mask from expanded hull</li>
+        <li>Refine using GrabCut algorithm (3 iterations)</li>
+        <li>Apply morphological closing and opening</li>
+        <li>Find final boundary contour</li>
+      </ol>
+    </div>
+    
+    <div style="margin-bottom: 20px;">
+      <h4>3. Boundary Analysis</h4>
+      <ul style="margin: 5px 0 0 20px;">
+        <li><strong>Contour extraction:</strong> Precise pixel-level boundary</li>
+        <li><strong>Area calculation:</strong> Total pixels enclosed</li>
+        <li><strong>Perimeter calculation:</strong> Boundary length</li>
+        <li><strong>Bounding box:</strong> Minimal axis-aligned rectangle</li>
+        <li><strong>Centroid:</strong> Center of mass calculation</li>
+      </ul>
+    </div>
+    
+    <div style="padding: 15px; background: #e3f2fd; border-radius: 5px; border-left: 4px solid #2196f3;">
+      <h4 style="margin-top: 0;">Why ArUco Markers?</h4>
+      <ul style="margin: 5px 0 0 20px;">
+        <li><strong>Robust detection:</strong> Works under varying lighting and perspective</li>
+        <li><strong>Unique identification:</strong> Each marker has a distinct ID</li>
+        <li><strong>Sub-pixel accuracy:</strong> Corner detection is highly accurate</li>
+        <li><strong>Fast processing:</strong> Optimized detection algorithms</li>
+        <li><strong>Error correction:</strong> Built-in Hamming code for reliability</li>
+      </ul>
+    </div>
+    
+    <div style="margin-top: 20px; padding: 10px; background: #fff3cd; border-radius: 3px;">
+      <strong>Note:</strong> The markers define the approximate boundary region. GrabCut refinement ensures the final segmentation follows the actual object edges, not just the marker hull.
+    </div>
+  </div>
+</body>
+</html>

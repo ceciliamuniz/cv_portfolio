@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Module 2: Template Matching & Blur Recovery{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="py-5 text-white">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-4 fw-bold mb-4">
+                    <i class="fas fa-microscope me-3"></i>Module 2: Computer Vision
+                </h1>
+                <p class="lead mb-4">
+                    Advanced computer vision techniques combining template matching through normalized cross-correlation 
+                    and FFT-based blur recovery using Wiener deconvolution.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{{ url_for('template_matching') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-search me-2"></i>Template Matching
+                    </a>
+                    <a href="{{ url_for('blur_recovery') }}" class="btn btn-success btn-lg">
+                        <i class="fas fa-magic me-2"></i>Blur Recovery
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-4 text-center">
+                <div class="bg-white bg-opacity-25 p-4 rounded-4">
+                    <i class="fas fa-cogs fa-4x mb-3"></i>
+                    <h4 class="fw-bold">Computer Vision</h4>
+                    <p class="mb-0">OpenCV • NumPy • FFT</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Section -->
+<div class="container py-5">
+    <div class="row g-4">
+        <!-- Part 1: Template Matching -->
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-lg">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-search fa-2x me-3"></i>
+                        <div>
+                            <h4 class="mb-0">Part 1: Template Matching</h4>
+                            <small>Normalized Cross-Correlation</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Object Detection & Regional Blurring</h5>
+                    <p class="card-text">
+                        Detect objects in scene images using template matching through normalized cross-correlation. 
+                        Apply Gaussian blur to detected regions using convolution.
+                    </p>
+                    
+                    <!-- Mathematical Formula -->
+                    <div class="bg-light p-3 rounded mb-3">
+                        <h6 class="fw-bold mb-2">
+                            <i class="fas fa-calculator me-2"></i>Mathematical Foundation:
+                        </h6>
+                        <code>NCC(x,y) = Σ[T(x',y') × I(x+x',y+y')] / √[Σ T² × Σ I²]</code>
+                        <br>
+                        <small class="text-muted">Where T is template, I is image region</small>
+                    </div>
+                    
+                    <!-- Features List -->
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Multiple template detection</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Confidence scoring</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Regional Gaussian blurring</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Adjustable blur parameters</li>
+                    </ul>
+                    
+                    <a href="{{ url_for('template_matching') }}" class="btn btn-primary">
+                        <i class="fas fa-play me-2"></i>Try Template Matching
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Part 2: Blur Recovery -->
+        <div class="col-lg-6">
+            <div class="card h-100 shadow-lg">
+                <div class="card-header bg-success text-white">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-magic fa-2x me-3"></i>
+                        <div>
+                            <h4 class="mb-0">Part 2: Blur Recovery</h4>
+                            <small>FFT & Wiener Deconvolution</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">Gaussian Blur & FFT Recovery</h5>
+                    <p class="card-text">
+                        Apply Gaussian blur through convolution and recover the original image using 
+                        FFT-based deconvolution with Wiener filtering.
+                    </p>
+                    
+                    <!-- Mathematical Formula -->
+                    <div class="bg-light p-3 rounded mb-3">
+                        <h6 class="fw-bold mb-2">
+                            <i class="fas fa-wave-square me-2"></i>Wiener Filter:
+                        </h6>
+                        <code>H*(ω) / (|H(ω)|² + λ)</code>
+                        <br>
+                        <small class="text-muted">Where H* is conjugate, λ is noise parameter</small>
+                    </div>
+                    
+                    <!-- Features List -->
+                    <ul class="list-unstyled">
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Gaussian convolution</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>FFT-based deconvolution</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>PSNR quality metrics</li>
+                        <li><i class="fas fa-check-circle text-success me-2"></i>Adjustable blur intensity</li>
+                    </ul>
+                    
+                    <a href="{{ url_for('blur_recovery') }}" class="btn btn-success">
+                        <i class="fas fa-play me-2"></i>Try Blur Recovery
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Technical Details Section -->
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-code me-2"></i>Technical Implementation
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Technologies -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-tools me-2 text-primary"></i>Technologies</h5>
+                            <ul class="list-unstyled">
+                                <li><strong>Flask:</strong> Web framework</li>
+                                <li><strong>OpenCV:</strong> Computer vision operations</li>
+                                <li><strong>NumPy:</strong> Array processing & FFT</li>
+                                <li><strong>Bootstrap:</strong> Responsive UI</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Key Algorithms -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-brain me-2 text-success"></i>Key Algorithms</h5>
+                            <ul class="list-unstyled">
+                                <li><strong>Template Matching:</strong> Normalized cross-correlation</li>
+                                <li><strong>Gaussian Blur:</strong> 2D convolution</li>
+                                <li><strong>FFT Recovery:</strong> Frequency domain processing</li>
+                                <li><strong>Wiener Filter:</strong> Optimal linear filtering</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Performance -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-chart-line me-2 text-warning"></i>Features</h5>
+                            <ul class="list-unstyled">
+                                <li><strong>Real-time:</strong> Sub-second processing</li>
+                                <li><strong>Multiple Formats:</strong> JPG, PNG support</li>
+                                <li><strong>Interactive:</strong> Adjustable parameters</li>
+                                <li><strong>Metrics:</strong> PSNR quality assessment</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instructions Section -->
+<div class="container py-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow border-0">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Getting Started
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-search me-2 text-primary"></i>Template Matching</h5>
+                            <ol>
+                                <li>Place template images in <code>images/templates/</code> directory</li>
+                                <li>Upload a scene image containing objects to detect</li>
+                                <li>Configure blur settings (optional)</li>
+                                <li>Run detection to find templates in the scene</li>
+                                <li>View results with bounding boxes and confidence scores</li>
+                            </ol>
+                        </div>
+                        <div class="col-md-6">
+                            <h5><i class="fas fa-magic me-2 text-success"></i>Blur Recovery</h5>
+                            <ol>
+                                <li>Upload any image for blur/recovery demonstration</li>
+                                <li>Adjust Gaussian blur sigma parameter</li>
+                                <li>Run the blur and recovery process</li>
+                                <li>Compare original, blurred, and recovered images</li>
+                                <li>Review PSNR quality metrics</li>
+                            </ol>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-4">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Note:</strong> Make sure to place template images in the <code>images/templates/</code> 
+                        directory before using the template matching feature. Supported formats: JPG, PNG.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

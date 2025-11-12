@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Module 2 Part 1: Template Matching through Correlation{% endblock %}
+
+{% block content %}
+<!-- Module 2 Part 1 Header -->
+<section class="py-5 bg-primary text-white">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-5 fw-bold mb-3">
+                    <i class="fas fa-search me-3"></i>Part 1: Template Matching
+                </h1>
+                <p class="lead mb-0">
+                    Demonstrate object detection using template matching through normalized cross-correlation and apply Gaussian blur using convolution
+                </p>
+            </div>
+            <div class="col-lg-4 text-end">
+                <div class="bg-white bg-opacity-25 p-3 rounded">
+                    <i class="fas fa-database fa-2x mb-2"></i>
+                    <div class="fw-bold" id="template-counter">Loading...</div>
+                    <small>Available Templates</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+<div class="container py-5">
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Scene Image</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Error/Success Messages -->
+                    <div id="error-container"></div>
+                    <div id="success-container"></div>
+                    
+                    <!-- Upload Form -->
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <!-- File Upload Zone -->
+                        <div class="upload-zone mb-4" id="upload-zone">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Click or drag image here</h5>
+                            <p class="text-muted small">Supports JPG, PNG formats</p>
+                            <input type="file" id="image-input" name="image" accept="image/*" style="display: none;">
+                        </div>
+                        
+                        <!-- Options -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="blur-detected" name="blur_detected" checked>
+                                    <label class="form-check-label fw-bold" for="blur-detected">
+                                        <i class="fas fa-blur me-1"></i>Blur Detected Objects
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="blur-sigma" class="form-label fw-bold">
+                                    <i class="fas fa-sliders-h me-1"></i>Blur Strength (σ)
+                                </label>
+                                <input type="range" class="form-range" id="blur-sigma" name="blur_sigma" 
+                                       min="1" max="10" step="0.5" value="3">
+                                <div class="text-center">
+                                    <small class="text-muted">σ = <span id="sigma-value">3.0</span></small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Process Button -->
+                        <button type="submit" class="btn btn-primary btn-lg w-100" id="process-btn">
+                            <i class="fas fa-search me-2"></i>Detect & Process
+                        </button>
+                    </form>
+                    
+                    <!-- Loading Spinner -->
+                    <div class="text-center mt-4 loading-spinner" id="loading-spinner">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Processing...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Processing image...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-eye me-2"></i>Detection Results</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Results will be populated here -->
+                    <div id="results-container" class="text-center text-muted">
+                        <i class="fas fa-image fa-4x mb-3 opacity-25"></i>
+                        <h5>No results yet</h5>
+                        <p>Upload an image to see template matching results</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Template Gallery -->
+    <div class="row mt-5">
+        <div class="col">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="fas fa-images me-2"></i>Available Templates</h4>
+                </div>
+                <div class="card-body">
+                    <div id="templates-gallery" class="row g-3">
+                        <div class="col-12 text-center">
+                            <div class="spinner-border text-info" role="status">
+                                <span class="visually-hidden">Loading templates...</span>
+                            </div>
+                            <p class="mt-2 text-muted">Loading available templates...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    setupFileUpload('upload-zone', 'image-input');
+    loadTemplates();
+    
+    // Update sigma display
+    const sigmaSlider = document.getElementById('blur-sigma');
+    const sigmaDisplay = document.getElementById('sigma-value');
+    
+    sigmaSlider.addEventListener('input', function() {
+        sigmaDisplay.textContent = this.value;
+    });
+    
+    // Form submission
+    document.getElementById('upload-form').addEventListener('submit', handleFormSubmit);
+});
+
+function loadTemplates() {
+    fetch('/api/templates')
+        .then(response => response.json())
+        .then(data => {
+            displayTemplates(data.templates);
+            document.getElementById('template-counter').textContent = data.templates.length;
+        })
+        .catch(error => {
+            document.getElementById('templates-gallery').innerHTML = `
+                <div class="col-12 text-center text-danger">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-2"></i>
+                    <p>Error loading templates. Make sure images/templates/ folder exists with template images.</p>
+                </div>
+            `;
+            document.getElementById('template-counter').textContent = '0';
+        });
+}
+
+function displayTemplates(templates) {
+    const gallery = document.getElementById('templates-gallery');
+    
+    if (templates.length === 0) {
+        gallery.innerHTML = `
+            <div class="col-12 text-center text-warning">
+                <i class="fas fa-folder-open fa-2x mb-2"></i>
+                <p>No templates found. Add template images to images/templates/ folder.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    gallery.innerHTML = templates.map(template => `
+        <div class="col-md-2 col-sm-3 col-4">
+            <div class="card border-0 shadow-sm">
+                <img src="${template.image}" class="card-img-top" alt="${template.name}" 
+                     style="height: 100px; object-fit: cover;">
+                <div class="card-body p-2">
+                    <h6 class="card-title small mb-1 text-truncate" title="${template.name}">
+                        ${template.name}
+                    </h6>
+                    <small class="text-muted">${template.size[1]}×${template.size[0]}</small>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('image-input');
+    if (!fileInput.files[0]) {
+        showError('Please select an image file');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+    formData.append('blur_detected', document.getElementById('blur-detected').checked);
+    formData.append('blur_sigma', document.getElementById('blur-sigma').value);
+    
+    // Show loading
+    showLoading('loading-spinner');
+    document.getElementById('process-btn').disabled = true;
+    
+    fetch('/api/template-matching', {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading('loading-spinner');
+        document.getElementById('process-btn').disabled = false;
+        
+        if (data.success) {
+            displayResults(data);
+            showSuccess(`Successfully processed! Found ${data.total_detected} object(s)`);
+        } else {
+            showError(data.error || 'Processing failed');
+        }
+    })
+    .catch(error => {
+        hideLoading('loading-spinner');
+        document.getElementById('process-btn').disabled = false;
+        showError('Network error: ' + error.message);
+    });
+}
+
+function displayResults(data) {
+    const container = document.getElementById('results-container');
+    
+    let detectionsHtml = '';
+    if (data.detections.length > 0) {
+        detectionsHtml = `
+            <div class="mb-3">
+                <h6 class="fw-bold text-success">
+                    <i class="fas fa-check-circle me-1"></i>
+                    ${data.detections.length} Object(s) Detected
+                </h6>
+            </div>
+            <div class="row g-2 mb-3">
+                ${data.detections.map(detection => `
+                    <div class="col-12">
+                        <div class="bg-light p-2 rounded d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>${detection.template}</strong>
+                                ${detection.blurred ? '<i class="fas fa-blur ms-1 text-primary" title="Blurred"></i>' : ''}
+                            </div>
+                            <span class="badge bg-success">${(detection.confidence * 100).toFixed(1)}%</span>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } else {
+        detectionsHtml = `
+            <div class="alert alert-warning">
+                <i class="fas fa-search me-2"></i>No objects detected above confidence threshold
+            </div>
+        `;
+    }
+    
+    container.innerHTML = `
+        <div class="position-relative">
+            <img src="${data.image}" class="result-image mb-3" alt="Detection Results">
+            ${data.total_detected > 0 ? `<div class="detection-badge">${data.total_detected} detected</div>` : ''}
+        </div>
+        ${detectionsHtml}
+        <div class="text-start mt-3">
+            <small class="text-muted">
+                <i class="fas fa-info-circle me-1"></i>
+                Green rectangles show detected objects with confidence scores.
+                ${data.detections.some(d => d.blurred) ? 'Detected regions have been blurred as requested.' : ''}
+            </small>
+        </div>
+    `;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{name}} - Results</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <a href="/">← Back</a>
+  <h1>{{name}}</h1>
+  <div class="grid">
+    <div>
+      <h3>Original</h3>
+      <img src="{{paths.original}}" alt="original"/>
+    </div>
+    <div>
+      <h3>Gradient Magnitude</h3>
+      <img src="{{paths.grad_mag}}" alt="grad mag"/>
+    </div>
+    <div>
+      <h3>Gradient Angle</h3>
+      <img src="{{paths.grad_angle}}" alt="grad angle"/>
+    </div>
+    <div>
+      <h3>Laplacian of Gaussian</h3>
+      <img src="{{paths.log}}" alt="log"/>
+    </div>
+  </div>
+  <h2>Side-by-side</h2>
+  <img src="{{paths.comparison}}" alt="comparison"/>
+</body>
+</html>

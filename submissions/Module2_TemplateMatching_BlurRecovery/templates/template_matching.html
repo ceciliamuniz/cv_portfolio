@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Template Matching - Module 2{% endblock %}
+
+{% block content %}
+<!-- Template Matching Header -->
+<section class="py-5 bg-primary text-white">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-5 fw-bold mb-3">
+                    <i class="fas fa-search me-3"></i>Template Matching
+                </h1>
+                <p class="lead mb-0">
+                    Detect objects using normalized cross-correlation and apply Gaussian blur to detected regions
+                </p>
+            </div>
+            <div class="col-lg-4 text-end">
+                <div class="bg-white bg-opacity-25 p-3 rounded">
+                    <i class="fas fa-database fa-2x mb-2"></i>
+                    <div class="fw-bold" id="template-counter">Loading...</div>
+                    <small>Available Templates</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+<div class="container py-5">
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Scene Image</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Error/Success Messages -->
+                    <div id="error-container"></div>
+                    <div id="success-container"></div>
+                    
+                    <!-- Upload Form -->
+                    <form id="upload-form" enctype="multipart/form-data">
+                        <!-- File Upload Zone -->
+                        <div class="upload-zone mb-4" id="upload-zone">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Click or drag image here</h5>
+                            <p class="text-muted small">Supports JPG, PNG formats</p>
+                            <input type="file" id="image-input" name="image" accept="image/*" style="display: none;">
+                        </div>
+                        
+                        <!-- Image Preview -->
+                        <div id="image-preview" class="mb-4" style="display: none;">
+                            <img id="preview-img" src="" alt="Preview" class="result-image">
+                            <div class="mt-2">
+                                <small class="text-muted" id="image-info"></small>
+                            </div>
+                        </div>
+                        
+                        <!-- Parameters -->
+                        <div class="mb-4">
+                            <h5><i class="fas fa-sliders-h me-2"></i>Detection Parameters</h5>
+                            
+                            <!-- Blur Detected Regions -->
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="blur-detected" name="blur_detected" checked>
+                                <label class="form-check-label fw-bold" for="blur-detected">
+                                    Apply Gaussian blur to detected regions
+                                </label>
+                            </div>
+                            
+                            <!-- Blur Sigma -->
+                            <div class="mb-3" id="blur-controls">
+                                <label for="blur-sigma" class="form-label fw-bold">
+                                    Blur Intensity (σ): <span id="sigma-value">3.0</span>
+                                </label>
+                                <input type="range" class="form-range" id="blur-sigma" name="blur_sigma" 
+                                       min="0.5" max="10" step="0.5" value="3.0">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Light Blur (0.5)</span>
+                                    <span>Heavy Blur (10.0)</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-search me-2"></i>Detect Templates
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="col-lg-6 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-eye me-2"></i>Detection Results</h4>
+                </div>
+                <div class="card-body">
+                    <!-- No Results Initially -->
+                    <div id="no-results" class="text-center py-5">
+                        <i class="fas fa-image fa-4x text-muted mb-3"></i>
+                        <h5 class="text-muted">No results yet</h5>
+                        <p class="text-muted">Upload an image and run detection to see results</p>
+                    </div>
+                    
+                    <!-- Results Content -->
+                    <div id="results-content" style="display: none;">
+                        <!-- Detection Summary -->
+                        <div class="mb-4">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h5><i class="fas fa-chart-bar me-2"></i>Detection Summary</h5>
+                                <span class="detection-badge" id="detection-count">0 detections</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Result Image -->
+                        <div class="mb-4">
+                            <img id="result-image" src="" alt="Detection Results" class="result-image" style="display: none;">
+                        </div>
+                        
+                        <!-- Detection Details -->
+                        <div id="detection-details">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Available Templates Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="fas fa-images me-2"></i>Available Templates</h4>
+                </div>
+                <div class="card-body">
+                    <div id="templates-loading" class="text-center py-3">
+                        <div class="spinner-border text-primary me-2"></div>
+                        Loading templates...
+                    </div>
+                    <div id="templates-container" class="row g-3" style="display: none;">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <div id="no-templates" class="text-center py-3" style="display: none;">
+                        <i class="fas fa-folder-open fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No templates found</h5>
+                        <p class="text-muted">Place template images in the <code>images/templates/</code> directory</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const uploadZone = document.getElementById('upload-zone');
+    const imageInput = document.getElementById('image-input');
+    const imagePreview = document.getElementById('image-preview');
+    const previewImg = document.getElementById('preview-img');
+    const imageInfo = document.getElementById('image-info');
+    const uploadForm = document.getElementById('upload-form');
+    const blurDetected = document.getElementById('blur-detected');
+    const blurSigma = document.getElementById('blur-sigma');
+    const sigmaValue = document.getElementById('sigma-value');
+    const blurControls = document.getElementById('blur-controls');
+    
+    // Results elements
+    const noResults = document.getElementById('no-results');
+    const resultsContent = document.getElementById('results-content');
+    const resultImage = document.getElementById('result-image');
+    const detectionCount = document.getElementById('detection-count');
+    const detectionDetails = document.getElementById('detection-details');
+    
+    // Upload zone click handler
+    uploadZone.addEventListener('click', () => imageInput.click());
+    
+    // Drag and drop handlers
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            imageInput.files = files;
+            handleImageSelect();
+        }
+    });
+    
+    // File input change handler
+    imageInput.addEventListener('change', handleImageSelect);
+    
+    // Blur sigma slider
+    blurSigma.addEventListener('input', function() {
+        sigmaValue.textContent = this.value;
+    });
+    
+    // Blur checkbox toggle
+    blurDetected.addEventListener('change', function() {
+        blurControls.style.display = this.checked ? 'block' : 'none';
+    });
+    
+    // Form submission
+    uploadForm.addEventListener('submit', handleFormSubmit);
+    
+    function handleImageSelect() {
+        const file = imageInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                imagePreview.style.display = 'block';
+                
+                // Show file info
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                imageInfo.textContent = `${file.name} (${fileSize} MB)`;
+                
+                clearMessages();
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        if (!imageInput.files[0]) {
+            showError('Please select an image first');
+            return;
+        }
+        
+        clearMessages();
+        showProcessing();
+        
+        const formData = new FormData();
+        formData.append('image', imageInput.files[0]);
+        formData.append('blur_detected', blurDetected.checked);
+        formData.append('blur_sigma', blurSigma.value);
+        
+        fetch('/api/template-matching', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideProcessing();
+            
+            if (data.success) {
+                showResults(data);
+                showSuccess(`Detection completed! Found ${data.total_detected} objects.`);
+            } else {
+                showError(data.error || 'Processing failed');
+            }
+        })
+        .catch(error => {
+            hideProcessing();
+            showError('Network error: ' + error.message);
+        });
+    }
+    
+    function showResults(data) {
+        // Show results section
+        noResults.style.display = 'none';
+        resultsContent.style.display = 'block';
+        
+        // Update detection count
+        detectionCount.textContent = `${data.total_detected} detection${data.total_detected !== 1 ? 's' : ''}`;
+        
+        // Show result image
+        resultImage.src = data.image;
+        resultImage.style.display = 'block';
+        
+        // Show detection details
+        if (data.detections && data.detections.length > 0) {
+            detectionDetails.innerHTML = `
+                <h6><i class="fas fa-list me-2"></i>Detection Details:</h6>
+                <div class="row g-2">
+                    ${data.detections.map(detection => `
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body py-2">
+                                    <h6 class="card-title mb-1">${detection.template}</h6>
+                                    <small class="text-muted">
+                                        Confidence: ${(detection.confidence * 100).toFixed(1)}%
+                                        ${detection.blurred ? ' • Blurred' : ''}
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        } else {
+            detectionDetails.innerHTML = '<p class="text-muted">No objects detected in the image.</p>';
+        }
+    }
+    
+    // Load available templates
+    loadTemplates();
+    
+    function loadTemplates() {
+        fetch('/api/templates')
+        .then(response => response.json())
+        .then(data => {
+            const templatesLoading = document.getElementById('templates-loading');
+            const templatesContainer = document.getElementById('templates-container');
+            const noTemplates = document.getElementById('no-templates');
+            const templateCounter = document.getElementById('template-counter');
+            
+            templatesLoading.style.display = 'none';
+            
+            if (data.templates && data.templates.length > 0) {
+                templatesContainer.style.display = 'block';
+                templateCounter.textContent = data.templates.length;
+                
+                templatesContainer.innerHTML = data.templates.map(template => `
+                    <div class="col-md-2 col-sm-3 col-4">
+                        <div class="card">
+                            <img src="${template.image}" class="card-img-top template-preview" alt="${template.name}">
+                            <div class="card-body p-2">
+                                <h6 class="card-title small mb-1">${template.name}</h6>
+                                <small class="text-muted">${template.size[1]}×${template.size[0]}</small>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                noTemplates.style.display = 'block';
+                templateCounter.textContent = '0';
+            }
+        })
+        .catch(error => {
+            document.getElementById('templates-loading').style.display = 'none';
+            document.getElementById('no-templates').style.display = 'block';
+            document.getElementById('template-counter').textContent = 'Error';
+            console.error('Error loading templates:', error);
+        });
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,374 @@
+{% extends "base.html" %}
+
+{% block title %}Blur Recovery - Module 2{% endblock %}
+
+{% block content %}
+<!-- Blur Recovery Header -->
+<section class="py-5 bg-success text-white">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <h1 class="display-5 fw-bold mb-3">
+                    <i class="fas fa-magic me-3"></i>Blur Recovery
+                </h1>
+                <p class="lead mb-0">
+                    Apply Gaussian blur and recover using FFT-based deconvolution with Wiener filtering
+                </p>
+            </div>
+            <div class="col-lg-4 text-end">
+                <div class="bg-white bg-opacity-25 p-3 rounded">
+                    <i class="fas fa-wave-square fa-2x mb-2"></i>
+                    <div class="fw-bold">FFT + Wiener</div>
+                    <small>Recovery Method</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Main Content -->
+<div class="container py-5">
+    <div class="row">
+        <!-- Upload & Settings Section -->
+        <div class="col-lg-5 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="fas fa-upload me-2"></i>Upload & Configure</h4>
+                </div>
+                <div class="card-body">
+                    <!-- Error/Success Messages -->
+                    <div id="error-container"></div>
+                    <div id="success-container"></div>
+                    
+                    <!-- Upload Form -->
+                    <form id="blur-form" enctype="multipart/form-data">
+                        <!-- File Upload Zone -->
+                        <div class="upload-zone mb-4" id="upload-zone">
+                            <i class="fas fa-image fa-3x text-muted mb-3"></i>
+                            <h5 class="text-muted">Click or drag image here</h5>
+                            <p class="text-muted small">Any image format supported</p>
+                            <input type="file" id="image-input" name="image" accept="image/*" style="display: none;">
+                        </div>
+                        
+                        <!-- Image Preview -->
+                        <div id="image-preview" class="mb-4" style="display: none;">
+                            <img id="preview-img" src="" alt="Preview" class="result-image">
+                            <div class="mt-2">
+                                <small class="text-muted" id="image-info"></small>
+                            </div>
+                        </div>
+                        
+                        <!-- Blur Parameters -->
+                        <div class="mb-4">
+                            <h5><i class="fas fa-sliders-h me-2"></i>Blur Parameters</h5>
+                            
+                            <!-- Sigma Parameter -->
+                            <div class="mb-3">
+                                <label for="sigma" class="form-label fw-bold">
+                                    Gaussian Blur Sigma (σ): <span id="sigma-value">3.0</span>
+                                </label>
+                                <input type="range" class="form-range" id="sigma" name="sigma" 
+                                       min="0.5" max="10" step="0.5" value="3.0">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Light Blur (0.5)</span>
+                                    <span>Heavy Blur (10.0)</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Mathematical Info -->
+                            <div class="bg-light p-3 rounded">
+                                <h6 class="fw-bold mb-2">
+                                    <i class="fas fa-calculator me-2"></i>Gaussian Kernel:
+                                </h6>
+                                <code>G(x,y) = (1/2πσ²) × exp(-(x² + y²)/2σ²)</code>
+                                <br>
+                                <small class="text-muted">Kernel size = 6σ + 1 (pixels)</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Submit Button -->
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-magic me-2"></i>Apply Blur & Recover
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow h-100">
+                <div class="card-header bg-info text-white">
+                    <h4 class="mb-0"><i class="fas fa-images me-2"></i>Processing Results</h4>
+                </div>
+                <div class="card-body">
+                    <!-- No Results Initially -->
+                    <div id="no-results" class="text-center py-5">
+                        <i class="fas fa-image fa-4x text-muted mb-3"></i>
+                        <h5 class="text-muted">No results yet</h5>
+                        <p class="text-muted">Upload an image and run the blur recovery process</p>
+                    </div>
+                    
+                    <!-- Results Content -->
+                    <div id="results-content" style="display: none;">
+                        <!-- Quality Metrics -->
+                        <div class="mb-4">
+                            <div class="row g-3">
+                                <div class="col-6">
+                                    <div class="card bg-primary text-white">
+                                        <div class="card-body text-center">
+                                            <h4 class="mb-0" id="psnr-value">--</h4>
+                                            <small>PSNR (dB)</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="card bg-success text-white">
+                                        <div class="card-body text-center">
+                                            <h4 class="mb-0" id="sigma-used">--</h4>
+                                            <small>Sigma Used</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Image Comparison Tabs -->
+                        <ul class="nav nav-tabs mb-3" id="image-tabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="original-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#original-pane" type="button" role="tab">
+                                    <i class="fas fa-image me-2"></i>Original
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="blurred-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#blurred-pane" type="button" role="tab">
+                                    <i class="fas fa-blur me-2"></i>Blurred
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="recovered-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#recovered-pane" type="button" role="tab">
+                                    <i class="fas fa-magic me-2"></i>Recovered
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <!-- Tab Content -->
+                        <div class="tab-content" id="image-tab-content">
+                            <div class="tab-pane fade show active" id="original-pane" role="tabpanel">
+                                <img id="original-image" src="" alt="Original Image" class="result-image" style="display: none;">
+                            </div>
+                            <div class="tab-pane fade" id="blurred-pane" role="tabpanel">
+                                <img id="blurred-image" src="" alt="Blurred Image" class="result-image" style="display: none;">
+                            </div>
+                            <div class="tab-pane fade" id="recovered-pane" role="tabpanel">
+                                <img id="recovered-image" src="" alt="Recovered Image" class="result-image" style="display: none;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Technical Details Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h4 class="mb-0"><i class="fas fa-brain me-2"></i>Algorithm Details</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Gaussian Blur Process -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-blur me-2 text-primary"></i>1. Gaussian Blur</h5>
+                            <p>Apply 2D Gaussian convolution to create blurred image:</p>
+                            <div class="bg-light p-2 rounded">
+                                <code>I_blurred = I ⊗ G(σ)</code>
+                            </div>
+                            <ul class="mt-2 small">
+                                <li>Separable convolution for efficiency</li>
+                                <li>Kernel size based on 6-sigma rule</li>
+                                <li>Maintains image dimensions</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- FFT Process -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-wave-square me-2 text-success"></i>2. FFT Processing</h5>
+                            <p>Transform to frequency domain for deconvolution:</p>
+                            <div class="bg-light p-2 rounded">
+                                <code>F{I}, F{G} → Frequency</code>
+                            </div>
+                            <ul class="mt-2 small">
+                                <li>2D Fast Fourier Transform</li>
+                                <li>Kernel padding and shifting</li>
+                                <li>Complex number operations</li>
+                            </ul>
+                        </div>
+                        
+                        <!-- Wiener Filter -->
+                        <div class="col-md-4">
+                            <h5><i class="fas fa-filter me-2 text-warning"></i>3. Wiener Filter</h5>
+                            <p>Optimal recovery with noise suppression:</p>
+                            <div class="bg-light p-2 rounded">
+                                <code>H*(ω) / (|H|² + λ)</code>
+                            </div>
+                            <ul class="mt-2 small">
+                                <li>Conjugate filter application</li>
+                                <li>Noise regularization (λ = 0.01)</li>
+                                <li>Inverse FFT for final image</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <!-- PSNR Explanation -->
+                    <div class="mt-4 p-3 bg-info bg-opacity-10 rounded">
+                        <h6><i class="fas fa-chart-line me-2"></i>PSNR (Peak Signal-to-Noise Ratio)</h6>
+                        <p class="mb-0">
+                            Measures recovery quality: <code>PSNR = 20 × log₁₀(MAX / √MSE)</code><br>
+                            <small class="text-muted">Higher values indicate better recovery quality. Typical good values: 20-40 dB</small>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Elements
+    const uploadZone = document.getElementById('upload-zone');
+    const imageInput = document.getElementById('image-input');
+    const imagePreview = document.getElementById('image-preview');
+    const previewImg = document.getElementById('preview-img');
+    const imageInfo = document.getElementById('image-info');
+    const blurForm = document.getElementById('blur-form');
+    const sigma = document.getElementById('sigma');
+    const sigmaValue = document.getElementById('sigma-value');
+    
+    // Results elements
+    const noResults = document.getElementById('no-results');
+    const resultsContent = document.getElementById('results-content');
+    const psnrValue = document.getElementById('psnr-value');
+    const sigmaUsed = document.getElementById('sigma-used');
+    const originalImage = document.getElementById('original-image');
+    const blurredImage = document.getElementById('blurred-image');
+    const recoveredImage = document.getElementById('recovered-image');
+    
+    // Upload zone click handler
+    uploadZone.addEventListener('click', () => imageInput.click());
+    
+    // Drag and drop handlers
+    uploadZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadZone.classList.add('dragover');
+    });
+    
+    uploadZone.addEventListener('dragleave', () => {
+        uploadZone.classList.remove('dragover');
+    });
+    
+    uploadZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove('dragover');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            imageInput.files = files;
+            handleImageSelect();
+        }
+    });
+    
+    // File input change handler
+    imageInput.addEventListener('change', handleImageSelect);
+    
+    // Sigma slider
+    sigma.addEventListener('input', function() {
+        sigmaValue.textContent = this.value;
+    });
+    
+    // Form submission
+    blurForm.addEventListener('submit', handleFormSubmit);
+    
+    function handleImageSelect() {
+        const file = imageInput.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                previewImg.src = e.target.result;
+                imagePreview.style.display = 'block';
+                
+                // Show file info
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                imageInfo.textContent = `${file.name} (${fileSize} MB)`;
+                
+                clearMessages();
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+    
+    function handleFormSubmit(e) {
+        e.preventDefault();
+        
+        if (!imageInput.files[0]) {
+            showError('Please select an image first');
+            return;
+        }
+        
+        clearMessages();
+        showProcessing();
+        
+        const formData = new FormData();
+        formData.append('image', imageInput.files[0]);
+        formData.append('sigma', sigma.value);
+        
+        fetch('/api/blur-recovery', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideProcessing();
+            
+            if (data.success) {
+                showResults(data);
+                showSuccess(`Processing completed! PSNR: ${data.psnr.toFixed(2)} dB`);
+            } else {
+                showError(data.error || 'Processing failed');
+            }
+        })
+        .catch(error => {
+            hideProcessing();
+            showError('Network error: ' + error.message);
+        });
+    }
+    
+    function showResults(data) {
+        // Show results section
+        noResults.style.display = 'none';
+        resultsContent.style.display = 'block';
+        
+        // Update metrics
+        psnrValue.textContent = data.psnr.toFixed(2);
+        sigmaUsed.textContent = data.sigma.toFixed(1);
+        
+        // Show images
+        originalImage.src = data.original;
+        originalImage.style.display = 'block';
+        
+        blurredImage.src = data.blurred;
+        blurredImage.style.display = 'block';
+        
+        recoveredImage.src = data.recovered;
+        recoveredImage.style.display = 'block';
+    }
+});
+</script>
+{% endblock %}
