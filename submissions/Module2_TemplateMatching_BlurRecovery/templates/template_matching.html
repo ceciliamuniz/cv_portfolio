@@ -60,8 +60,39 @@
                         
 
                         
+                        <!-- Parameters -->
+                        <div class=\"mb-4\">
+                            <h5><i class=\"fas fa-sliders-h me-2\"></i>Detection Parameters</h5>
+                            
+                            <!-- Blur Detected Regions -->
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <label class="form-label fw-bold mb-0" for="blur-detected">
+                                    Apply Gaussian blur to detected regions
+                                </label>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="blur-detected" name="blur_detected" checked>
+                                    <label class="form-check-label" for="blur-detected">
+                                        <span class="visually-hidden">Toggle blur</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Blur Sigma -->
+                            <div class="mb-3" id="blur-controls" style="display: block;">
+                                <label for="blur-sigma" class="form-label fw-bold">
+                                    Blur Intensity (σ): <span id="sigma-value">3.0</span>
+                                </label>
+                                <input type="range" class="form-range" id="blur-sigma" name="blur_sigma" 
+                                       min="0.5" max="10" step="0.5" value="3.0">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Light Blur (0.5)</span>
+                                    <span>Heavy Blur (10.0)</span>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Submit Button -->
-                        <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <button type="submit" class="btn btn-primary btn-lg w-100 shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 12px; font-weight: 600; letter-spacing: 0.5px; transition: all 0.3s ease; padding: 15px 30px;">
                             <i class="fas fa-search me-2"></i>Detect Templates
                         </button>
                     </form>
@@ -147,6 +178,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const uploadForm = document.getElementById('upload-form');
 
     
+    const blurDetected = document.getElementById('blur-detected');
+    const blurSigma = document.getElementById('blur-sigma');
+    const sigmaValue = document.getElementById('sigma-value');
+    const blurControls = document.getElementById('blur-controls');
+    
     // Results elements
     const noResults = document.getElementById('no-results');
     const resultsContent = document.getElementById('results-content');
@@ -182,6 +218,24 @@ document.addEventListener('DOMContentLoaded', function() {
     
 
     
+    // Blur sigma slider
+    console.log('Blur sigma element:', blurSigma);
+    console.log('Sigma value element:', sigmaValue);
+    
+    if (blurSigma && sigmaValue) {
+        blurSigma.addEventListener('input', function() {
+            console.log('Slider moved to:', this.value);
+            sigmaValue.textContent = this.value;
+        });
+    } else {
+        console.error('Blur slider elements not found');
+    }
+    
+    // Blur checkbox toggle
+    blurDetected.addEventListener('change', function() {
+        blurControls.style.display = this.checked ? 'block' : 'none';
+    });
+    
     // Form submission
     uploadForm.addEventListener('submit', handleFormSubmit);
     
@@ -216,6 +270,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData();
         formData.append('image', imageInput.files[0]);
+        formData.append('blur_detected', blurDetected.checked);
+        formData.append('blur_sigma', blurSigma.value);
         
         fetch('/api/template-matching', {
             method: 'POST',
@@ -260,8 +316,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             <div class="card bg-light">
                                 <div class="card-body py-2">
                                     <h6 class="card-title mb-1">${detection.template}</h6>
-                                    <small class="text-muted">
+                                    <small class=\"text-muted\">
                                         Confidence: ${(detection.confidence * 100).toFixed(1)}%
+                                        ${detection.blurred ? ' • Blurred' : ''}
                                     </small>
                                 </div>
                             </div>
@@ -278,9 +335,18 @@ document.addEventListener('DOMContentLoaded', function() {
     loadTemplates();
     
     function loadTemplates() {
+        console.log('Loading templates...');
         fetch('/api/templates')
-        .then(response => response.json())
+        .then(response => {
+            console.log('Templates API response status:', response.status);
+            console.log('Response OK:', response.ok);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('Templates data:', data);
             const templatesLoading = document.getElementById('templates-loading');
             const templatesContainer = document.getElementById('templates-container');
             const noTemplates = document.getElementById('no-templates');
@@ -309,11 +375,59 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         })
         .catch(error => {
+            console.error('Error loading templates:', error);
+            console.error('Error details:', error.message);
             document.getElementById('templates-loading').style.display = 'none';
             document.getElementById('no-templates').style.display = 'block';
             document.getElementById('template-counter').textContent = 'Error';
-            console.error('Error loading templates:', error);
+            
+            // Show more detailed error
+            const noTemplatesDiv = document.getElementById('no-templates');
+            noTemplatesDiv.innerHTML = `
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="text-danger">Error Loading Templates</h5>
+                <p class="text-muted">Failed to load templates from /api/templates</p>
+                <small class="text-muted">Check browser console for details</small>
+            `;
         });
+    }
+    
+    // Utility functions
+    function clearMessages() {
+        document.getElementById('error-container').innerHTML = '';
+        document.getElementById('success-container').innerHTML = '';
+    }
+    
+    function showError(message) {
+        document.getElementById('error-container').innerHTML = `
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-triangle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+    
+    function showSuccess(message) {
+        document.getElementById('success-container').innerHTML = `
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i>${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `;
+    }
+    
+    function showProcessing() {
+        const submitButton = document.querySelector('button[type="submit"]');
+        submitButton.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
+        submitButton.disabled = true;
+        submitButton.style.background = 'linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%)';
+    }
+    
+    function hideProcessing() {
+        const submitButton = document.querySelector('button[type="submit"]');
+        submitButton.innerHTML = '<i class="fas fa-search me-2"></i>Detect Templates';
+        submitButton.disabled = false;
+        submitButton.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
     }
 });
 </script>

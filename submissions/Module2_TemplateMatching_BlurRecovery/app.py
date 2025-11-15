@@ -49,21 +49,21 @@ class Module2Engine:
                     templates[template_file.stem] = template
         return templates
     
-    def template_matching(self, scene_image):
+    def template_matching(self, scene_image, blur_detected=True, blur_sigma=3.0):
         """
         Template Matching using Normalized Cross-Correlation (NCC)
         as required by the assignment.
-
-        No histogram equalization.
-        No multi-scale.
-        No blur.
-        No rotation.
+        
+        Detects objects using template matching, then applies Gaussian blur
+        to the detected regions as specified in the assignment.
 
         Args:
             scene_image: input BGR scene image
+            blur_detected: whether to blur detected regions
+            blur_sigma: Gaussian blur sigma parameter
 
         Returns:
-            result_image: scene with bounding boxes
+            result_image: scene with bounding boxes and blurred regions
             detections: list with template name, confidence, and bbox
         """
 
@@ -117,6 +117,21 @@ class Module2Engine:
                 x1, y1, x2, y2 = boxes[idx]
                 score = scores[idx]
 
+                # Apply blur to detected region if enabled
+                if blur_detected:
+                    # Extract the region
+                    region = scene_result[y1:y2, x1:x2]
+                    
+                    # Apply Gaussian blur
+                    ksize = int(6 * blur_sigma) + 1
+                    if ksize % 2 == 0:
+                        ksize += 1
+                    blurred_region = cv.GaussianBlur(region, (ksize, ksize), blur_sigma)
+                    
+                    # Replace the region in the result image
+                    scene_result[y1:y2, x1:x2] = blurred_region
+                
+                # Draw bounding box
                 cv.rectangle(scene_result, (x1, y1), (x2, y2), (0, 255, 0), 2)
                 cv.putText(scene_result, f"{template_name}: {score:.2f}",
                            (x1, y1 - 5), cv.FONT_HERSHEY_SIMPLEX,
@@ -125,7 +140,8 @@ class Module2Engine:
                 detections.append({
                     "template": template_name,
                     "confidence": float(score),
-                    "bbox": [int(x1), int(y1), int(w), int(h)]
+                    "bbox": [int(x1), int(y1), int(w), int(h)],
+                    "blurred": blur_detected
                 })
 
         return scene_result, detections
@@ -319,13 +335,19 @@ def api_template_matching():
         if file.filename == '':
             return jsonify({'error': 'No image selected'}), 400
         
+        # Get parameters
+        blur_detected = request.form.get('blur_detected', 'false').lower() == 'true'
+        blur_sigma = float(request.form.get('blur_sigma', 3.0))
+        
         # Read and process image
         image_bytes = file.read()
         nparr = np.frombuffer(image_bytes, np.uint8)
         image = cv.imdecode(nparr, cv.IMREAD_COLOR)
         
-        # Perform template matching
-        result_image, detections = cv_engine.template_matching(image)
+        # Perform template matching with blur
+        result_image, detections = cv_engine.template_matching(
+            image, blur_detected, blur_sigma
+        )
         
         # Save result image
         result_path = os.path.join(RESULTS_FOLDER, 'template_matching_result.jpg')
