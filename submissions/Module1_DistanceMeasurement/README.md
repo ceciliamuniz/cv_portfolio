@@ -3,6 +3,12 @@
 ## Assignment Overview
 This application demonstrates real-world distance measurement using **perspective projection mathematics** and **camera calibration**. Students can upload images, click two points, and calculate actual distances in centimeters.
 
+## Demo Video
+
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod1_rec.gif)
+
+*Live demonstration of the distance measurement application showing image upload, point selection, and real-time distance calculation.*
+
 ## Features
 - ✨ **Interactive Web Interface** - User-friendly point-and-click measurement
 - 📐 **Perspective Projection** - Mathematical conversion from pixels to real-world coordinates  
@@ -56,11 +62,6 @@ python app.py
 ### Step 3: Access the Web Interface
 Open your browser and navigate to: `http://localhost:5001`
 
-## Demo Video
-
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod1_rec.gif)
-
-*Live demonstration of the distance measurement application showing image upload, point selection, and real-time distance calculation.*
 
 ## Usage Instructions
 
