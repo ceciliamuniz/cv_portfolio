@@ -12,7 +12,7 @@
                     <i class="fas fa-search me-3"></i>Template Matching
                 </h1>
                 <p class="lead mb-0">
-                    Detect objects using normalized cross-correlation and apply Gaussian blur to detected regions
+                    Detect objects using normalized cross-correlation template matching
                 </p>
             </div>
             <div class="col-lg-4 text-end">
@@ -58,31 +58,7 @@
                             </div>
                         </div>
                         
-                        <!-- Parameters -->
-                        <div class="mb-4">
-                            <h5><i class="fas fa-sliders-h me-2"></i>Detection Parameters</h5>
-                            
-                            <!-- Blur Detected Regions -->
-                            <div class="form-check form-switch mb-3">
-                                <input class="form-check-input" type="checkbox" id="blur-detected" name="blur_detected" checked>
-                                <label class="form-check-label fw-bold" for="blur-detected">
-                                    Apply Gaussian blur to detected regions
-                                </label>
-                            </div>
-                            
-                            <!-- Blur Sigma -->
-                            <div class="mb-3" id="blur-controls">
-                                <label for="blur-sigma" class="form-label fw-bold">
-                                    Blur Intensity (σ): <span id="sigma-value">3.0</span>
-                                </label>
-                                <input type="range" class="form-range" id="blur-sigma" name="blur_sigma" 
-                                       min="0.5" max="10" step="0.5" value="3.0">
-                                <div class="d-flex justify-content-between small text-muted">
-                                    <span>Light Blur (0.5)</span>
-                                    <span>Heavy Blur (10.0)</span>
-                                </div>
-                            </div>
-                        </div>
+
                         
                         <!-- Submit Button -->
                         <button type="submit" class="btn btn-primary btn-lg w-100">
@@ -169,10 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const previewImg = document.getElementById('preview-img');
     const imageInfo = document.getElementById('image-info');
     const uploadForm = document.getElementById('upload-form');
-    const blurDetected = document.getElementById('blur-detected');
-    const blurSigma = document.getElementById('blur-sigma');
-    const sigmaValue = document.getElementById('sigma-value');
-    const blurControls = document.getElementById('blur-controls');
+
     
     // Results elements
     const noResults = document.getElementById('no-results');
@@ -207,15 +180,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // File input change handler
     imageInput.addEventListener('change', handleImageSelect);
     
-    // Blur sigma slider
-    blurSigma.addEventListener('input', function() {
-        sigmaValue.textContent = this.value;
-    });
-    
-    // Blur checkbox toggle
-    blurDetected.addEventListener('change', function() {
-        blurControls.style.display = this.checked ? 'block' : 'none';
-    });
+
     
     // Form submission
     uploadForm.addEventListener('submit', handleFormSubmit);
@@ -251,8 +216,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData();
         formData.append('image', imageInput.files[0]);
-        formData.append('blur_detected', blurDetected.checked);
-        formData.append('blur_sigma', blurSigma.value);
         
         fetch('/api/template-matching', {
             method: 'POST',
@@ -299,7 +262,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <h6 class="card-title mb-1">${detection.template}</h6>
                                     <small class="text-muted">
                                         Confidence: ${(detection.confidence * 100).toFixed(1)}%
-                                        ${detection.blurred ? ' • Blurred' : ''}
                                     </small>
                                 </div>
                             </div>

@@ -1,18 +1,10 @@
 """
 Module 2: Template Matching and Blur Recovery
-Standalone Flask Application
 
 This module combines two computer vision techniques:
 1. Template Matching through Normalized Cross-Correlation with Regional Blurring
 2. Gaussian Blur and FFT-based Recovery using Wiener Deconvolution
 
-Mathematical Foundation:
-- Template Matching: Uses normalized cross-correlation to find templates in scenes
-- Gaussian Blur: Applied via convolution with 2D Gaussian kernel
-- FFT Recovery: Uses Wiener deconvolution in frequency domain to recover blurred images
-
-Author: Computer Vision Student
-Course: Computer Vision Module 2
 """
 
 from flask import Flask, render_template, request, jsonify
@@ -21,7 +13,6 @@ import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use non-GUI backend
 import base64
-import io
 import os
 from pathlib import Path
 
@@ -58,164 +49,205 @@ class Module2Engine:
                     templates[template_file.stem] = template
         return templates
     
-    def template_matching_with_blur(self, scene_image, blur_detected=True, blur_sigma=3.0):
+    def template_matching(self, scene_image):
         """
-        Perform template matching using normalized cross-correlation
-        and optionally blur detected regions
-        
+        Template Matching using Normalized Cross-Correlation (NCC)
+        as required by the assignment.
+
+        No histogram equalization.
+        No multi-scale.
+        No blur.
+        No rotation.
+
         Args:
-            scene_image: Input scene image (BGR format)
-            blur_detected: Whether to blur detected regions
-            blur_sigma: Standard deviation for Gaussian blur
-            
+            scene_image: input BGR scene image
+
         Returns:
-            tuple: (result_image, detection_results)
+            result_image: scene with bounding boxes
+            detections: list with template name, confidence, and bbox
         """
+
         templates = self.load_templates()
-        results = []
-        
-        # Convert scene to grayscale if needed
+        detections = []
+
+        # Convert to grayscale
         if len(scene_image.shape) == 3:
             scene_gray = cv.cvtColor(scene_image, cv.COLOR_BGR2GRAY)
         else:
             scene_gray = scene_image.copy()
-            
+
         scene_result = scene_image.copy()
-        
+
+        # Loop through templates
         for template_name, template in templates.items():
-            # Check if template is smaller than scene
-            scene_h, scene_w = scene_gray.shape
-            template_h, template_w = template.shape
-            
-            # Skip if template is larger than scene
-            if template_h > scene_h or template_w > scene_w:
-                print(f"Skipping {template_name}: template ({template_w}x{template_h}) larger than scene ({scene_w}x{scene_h})")
+
+            # Ensure template fits
+            if template.shape[0] > scene_gray.shape[0] or template.shape[1] > scene_gray.shape[1]:
                 continue
-            
-            # Template matching with normalized cross-correlation
-            result = cv.matchTemplate(scene_gray, template, cv.TM_CCOEFF_NORMED)
-            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
-            
-            # Debug: Print confidence scores
-            print(f"Template {template_name}: confidence = {max_val:.3f}")
-            
-            # Set threshold for detection
-            threshold = 0.3
-            
-            if max_val >= threshold:
-                # Get bounding box coordinates
-                h, w = template.shape
-                top_left = max_loc
-                bottom_right = (top_left[0] + w, top_left[1] + h)
-                
-                # Draw detection rectangle
-                cv.rectangle(scene_result, top_left, bottom_right, (0, 255, 0), 2)
-                cv.putText(scene_result, f'{template_name}: {max_val:.2f}', 
-                          (top_left[0], top_left[1] - 10), 
-                          cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-                
-                # Apply Gaussian blur to detected region if requested
-                if blur_detected:
-                    roi = scene_result[top_left[1]:bottom_right[1], 
-                                     top_left[0]:bottom_right[0]]
-                    
-                    # Calculate kernel size based on sigma (6-sigma rule)
-                    kernel_size = int(6 * blur_sigma + 1)
-                    if kernel_size % 2 == 0:
-                        kernel_size += 1
-                    
-                    # Apply Gaussian blur via convolution
-                    blurred_roi = cv.GaussianBlur(roi, (kernel_size, kernel_size), blur_sigma)
-                    scene_result[top_left[1]:bottom_right[1], 
-                               top_left[0]:bottom_right[0]] = blurred_roi
-                
-                results.append({
-                    'template': template_name,
-                    'confidence': float(max_val),
-                    'bbox': [int(top_left[0]), int(top_left[1]), int(w), int(h)],
-                    'blurred': blur_detected
+
+            h, w = template.shape
+
+            # Perform NCC correlation
+            heatmap = cv.matchTemplate(scene_gray, template, cv.TM_CCOEFF_NORMED)
+
+            # Threshold (NCC correlation)
+            threshold = 0.40
+            yloc, xloc = np.where(heatmap >= threshold)
+
+            # Collect raw detections
+            boxes = []
+            scores = []
+
+            for (x, y) in zip(xloc, yloc):
+                boxes.append([x, y, x + w, y + h])
+                scores.append(float(heatmap[y, x]))
+
+            if not boxes:
+                print(f"No matches for: {template_name}")
+                continue
+
+            boxes = np.array(boxes)
+            scores = np.array(scores)
+
+            # Non-maximum suppression
+            keep_indices = self.non_max_suppression(boxes, scores, overlapThresh=0.3)
+
+            # Draw and store results
+            for idx in keep_indices:
+                x1, y1, x2, y2 = boxes[idx]
+                score = scores[idx]
+
+                cv.rectangle(scene_result, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv.putText(scene_result, f"{template_name}: {score:.2f}",
+                           (x1, y1 - 5), cv.FONT_HERSHEY_SIMPLEX,
+                           0.5, (0, 255, 0), 1)
+
+                detections.append({
+                    "template": template_name,
+                    "confidence": float(score),
+                    "bbox": [int(x1), int(y1), int(w), int(h)]
                 })
-        
-        return scene_result, results
+
+        return scene_result, detections
     
-    def gaussian_blur_recovery(self, image, sigma=3.0):
+    def non_max_suppression(self, boxes, scores, overlapThresh=0.3):
         """
-        Demonstrate Gaussian blur and FFT-based recovery using Wiener deconvolution
-        
-        Mathematical Process:
-        1. Apply Gaussian blur: I_blurred = I * G(σ)
-        2. DFT both image and kernel: F{I_blurred}, F{G}
-        3. Wiener deconvolution: F{I_recovered} = F{I_blurred} * conj(F{G}) / (|F{G}|² + λ)
-        4. IDFT to get recovered image
-        
+        Fast NMS for template matching bounding boxes.
+        boxes: [x1,y1,x2,y2]
+        returns: indices of kept boxes
+        """
+        if len(boxes) == 0:
+            return []
+
+        x1 = boxes[:,0]
+        y1 = boxes[:,1]
+        x2 = boxes[:,2]
+        y2 = boxes[:,3]
+
+        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+        order = scores.argsort()[::-1]
+
+        keep = []
+        while len(order) > 0:
+            i = order[0]
+            keep.append(i)
+
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
+
+            w = np.maximum(0, xx2 - xx1 + 1)
+            h = np.maximum(0, yy2 - yy1 + 1)
+            inter = w * h
+
+            ovr = inter / (areas[i] + areas[order[1:]] - inter)
+            inds = np.where(ovr <= overlapThresh)[0]
+            order = order[inds + 1]
+
+        return keep
+    
+    def gaussian_blur_recovery(self, image, sigma=3.0, noise_level=1e-2, debug=False):
+        """
+        Robust Gaussian blur + Wiener deconvolution using numpy.fft (fft2 / ifft2).
+        This avoids cv.dft/roll/fftshift pitfalls and prevents quadrant swaps.
+
         Args:
-            image: Input image
-            sigma: Standard deviation for Gaussian kernel
-            
+            image: BGR or grayscale image (uint8)
+            sigma: gaussian kernel sigma (float)
+            noise_level: K parameter in Wiener filter (float)
+            debug: if True, prints diagnostics
+
         Returns:
-            dict: Contains original, blurred, recovered images and PSNR
+            dict with 'original', 'blurred', 'recovered' as uint8 arrays (single-channel)
         """
-        # Convert to grayscale and normalize to [0,1]
+        # 1) convert to grayscale float image in [0,1]
         if len(image.shape) == 3:
             gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
         else:
             gray = image.copy()
-
         L = gray.astype(np.float32) / 255.0
-
-        # Create and apply Gaussian blur
-        kernel_size = int(6 * sigma + 1)
-        if kernel_size % 2 == 0:
-            kernel_size += 1
-
-        # Apply blur using OpenCV
-        L_b = cv.GaussianBlur(L, (kernel_size, kernel_size), sigma)
-
-        # Create 2D Gaussian kernel for deconvolution and pad to image size
-        gaussian_kernel_2d = self.create_gaussian_kernel(kernel_size, sigma)
         h, w = L.shape
-        kh, kw = gaussian_kernel_2d.shape
-        pad_y = max(0, h - kh)
-        pad_x = max(0, w - kw)
-        top = pad_y // 2
-        bottom = pad_y - top
-        left = pad_x // 2
-        right = pad_x - left
-        psf = cv.copyMakeBorder(gaussian_kernel_2d, top, bottom, left, right, borderType=cv.BORDER_CONSTANT, value=0)
 
-        # DFT (complex) of blurred image and PSF
-        dft_L_b = cv.dft(L_b, flags=cv.DFT_COMPLEX_OUTPUT)
-        dft_psf = cv.dft(psf, flags=cv.DFT_COMPLEX_OUTPUT)
+        # 2) blur using OpenCV (to simulate observed blurred image)
+        ksize = int(6 * sigma + 1)
+        if ksize % 2 == 0:
+            ksize += 1
+        L_b = cv.GaussianBlur(L, (ksize, ksize), sigma)
 
-        # Wiener deconvolution in frequency domain
-        noise_level = 0.01
-        psf_mag_sq = dft_psf[:, :, 0] ** 2 + dft_psf[:, :, 1] ** 2
-        denominator = psf_mag_sq + noise_level
+        # 3) create gaussian kernel (small) and pad to image size
+        kernel_small = self.create_gaussian_kernel(ksize, sigma)  # normalized
+        kh, kw = kernel_small.shape
 
-        # Compute recovered spectrum: F(I) * conj(H) / (|H|^2 + K)
-        recovered_real = (dft_L_b[:, :, 0] * dft_psf[:, :, 0] + dft_L_b[:, :, 1] * dft_psf[:, :, 1]) / denominator
-        recovered_imag = (dft_L_b[:, :, 1] * dft_psf[:, :, 0] - dft_L_b[:, :, 0] * dft_psf[:, :, 1]) / denominator
+        # pad kernel to image size centered in the array
+        pad_top = (h - kh) // 2
+        pad_bottom = h - kh - pad_top
+        pad_left = (w - kw) // 2
+        pad_right = w - kw - pad_left
+        psf = np.pad(kernel_small, ((pad_top, pad_bottom), (pad_left, pad_right)), mode='constant')
 
-        dft_recovered = np.stack([recovered_real, recovered_imag], axis=2)
+        # 4) center PSF for frequency domain (move kernel center to [0,0] freq position)
+        psf_shifted = np.fft.ifftshift(psf)   # critical
 
-        # Inverse DFT to get recovered image
-        L_recovered = cv.idft(dft_recovered, flags=cv.DFT_SCALE | cv.DFT_REAL_OUTPUT)
-        if len(L_recovered.shape) > 2:
-            L_recovered = L_recovered[:, :, 0]
+        # DEBUG checks
+        if debug:
+            print("L shape:", L.shape)
+            print("psf small shape:", kernel_small.shape)
+            print("psf padded shape:", psf.shape)
+            print("psf sum (should be ~1):", psf.sum())
+            # show where the largest PSF value is (should be near center of kernel_small before ifftshift)
+            print("psf max index (padded):", np.unravel_index(np.argmax(psf), psf.shape))
+            print("psf_shifted max index:", np.unravel_index(np.argmax(psf_shifted), psf_shifted.shape))
 
-        # Normalize recovered image to [0, 1]
-        L_recovered_norm = L_recovered - L_recovered.min()
-        if L_recovered_norm.max() > 0:
-            L_recovered_norm = L_recovered_norm / L_recovered_norm.max()
+        # 5) FFTs using numpy
+        F_blurred = np.fft.fft2(L_b)
+        H = np.fft.fft2(psf_shifted)
+
+        # 6) Wiener filter: G * conj(H) / (|H|^2 + K)
+        H_conj = np.conjugate(H)
+        H_mag_sq = (np.abs(H) ** 2)
+        denom = H_mag_sq + noise_level
+        F_recovered = (F_blurred * H_conj) / denom
+
+        # 7) inverse FFT to get recovered image
+        L_recovered = np.fft.ifft2(F_recovered).real
+
+        # 8) clip / normalize to [0,1] robustly
+        L_recovered = L_recovered - L_recovered.min()
+        maxv = L_recovered.max()
+        if maxv > 0:
+            L_recovered = L_recovered / maxv
         else:
-            L_recovered_norm = np.zeros_like(L_recovered_norm)
+            L_recovered = np.zeros_like(L_recovered)
 
-        psnr = self.calculate_psnr(L, L_recovered_norm)
+        # 9) compute PSNR (expecting original L in [0,1])
+        psnr = self.calculate_psnr(L, L_recovered)
 
+        # 10) return uint8 images for display
         return {
-            'original': (L * 255).astype(np.uint8),
-            'blurred': (L_b * 255).astype(np.uint8),
-            'recovered': np.clip(L_recovered_norm * 255, 0, 255).astype(np.uint8),
+            'original': (np.clip(L * 255.0, 0, 255)).astype(np.uint8),
+            'blurred': (np.clip(L_b * 255.0, 0, 255)).astype(np.uint8),
+            'recovered': (np.clip(L_recovered * 255.0, 0, 255)).astype(np.uint8),
             'psnr': float(psnr),
             'sigma': float(sigma)
         }
@@ -287,19 +319,13 @@ def api_template_matching():
         if file.filename == '':
             return jsonify({'error': 'No image selected'}), 400
         
-        # Get parameters
-        blur_detected = request.form.get('blur_detected', 'false').lower() == 'true'
-        blur_sigma = float(request.form.get('blur_sigma', 3.0))
-        
         # Read and process image
         image_bytes = file.read()
         nparr = np.frombuffer(image_bytes, np.uint8)
         image = cv.imdecode(nparr, cv.IMREAD_COLOR)
         
         # Perform template matching
-        result_image, detections = cv_engine.template_matching_with_blur(
-            image, blur_detected, blur_sigma
-        )
+        result_image, detections = cv_engine.template_matching(image)
         
         # Save result image
         result_path = os.path.join(RESULTS_FOLDER, 'template_matching_result.jpg')

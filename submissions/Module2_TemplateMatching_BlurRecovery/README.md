@@ -2,6 +2,15 @@
 
 A standalone Flask web application implementing advanced computer vision techniques for object detection and image restoration.
 
+## Demo Video
+## Part 1
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod2_pt1_rec.gif)
+
+## Part 2
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod2_pt2_rec.gif)
+
+*Live demonstration of the template matching and blur recovery application showing image upload, template detection with confidence scoring, and FFT-based blur recovery with PSNR metrics.*
+
 ## 📋 Overview
 
 This module combines two fundamental computer vision operations:
@@ -75,6 +84,7 @@ Where:
 - `MAX_I` is the maximum possible pixel value (1.0 for normalized images)
 - Higher PSNR values indicate better recovery quality
 - Typical good values: 20-40 dB
+
 
 ## 🚀 Quick Start
 
@@ -157,7 +167,6 @@ Module2_TemplateMatching_BlurRecovery/
 ├── images/
 │   └── templates/                 # Template images for detection
 │       ├── IMG_3550.jpg          # Sample template 1
-│       ├── IMG_3551.jpg          # Sample template 2
 │       └── ...                   # Additional templates
 └── static/
     ├── uploads/                   # Temporary uploaded images
@@ -242,9 +251,21 @@ Main processing engine implementing computer vision algorithms:
 ## 📊 Expected Results
 
 ### Template Matching
-- **Detection Rate**: 70-90% for well-matched templates
-- **False Positives**: Minimized by 0.3 confidence threshold
-- **Processing Time**: 0.1-2 seconds depending on image size and template count
+- **Detection Rate**: 40–60% for well-matched templates under similar conditions; 20–40% for real-world scenarios
+- **Confidence Scores**: Typically 0.4–0.6 depending on scene lighting and template similarity
+- **Bounding Boxes**: Correctly overlay detected objects when found
+- **Processing Time**: <2 seconds for images up to 2048×2048
+
+#### Example Observations:
+- **IMG_3550–IMG_3557**: Detections mostly above 0.5 confidence
+- **Slight false positives** possible with low-contrast or occluded templates
+
+#### Limitations / Why Some Results Aren't Perfect:
+- **Low Contrast / Poor Lighting**: Templates with similar color or intensity to the background are harder to detect
+- **Partial Occlusion**: Template matching requires the full template to be visible; cropped or blocked objects reduce confidence
+- **Size Mismatch**: Templates larger than objects in the scene cannot be matched; the current implementation does not include multi-scale matching
+- **Rotation / Perspective Changes**: Detection fails if the object is rotated or seen from a different angle than the template
+- **Threshold Sensitivity**: A fixed confidence threshold may reject some valid detections or include weak false positives
 
 ### Blur Recovery
 - **PSNR Values**:
