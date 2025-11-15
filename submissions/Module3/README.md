@@ -237,6 +237,4 @@ This implementation demonstrates:
 
 ---
 
-**Author**: Computer Vision Student  
-**Course**: Computer Vision Module 3  
-**Date**: October 2025
+**Author**: Cecilia Muniz Siqueira
