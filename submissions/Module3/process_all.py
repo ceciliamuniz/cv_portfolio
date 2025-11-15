@@ -7,11 +7,8 @@ Processes 10 uploaded images to compute:
 4. Corner detection keypoints
 5. Object boundary detection
 
-Author: Computer Vision Student
-Course: Computer Vision Module 3
 """
 
-import os
 import cv2
 import numpy as np
 from pathlib import Path
@@ -63,19 +60,21 @@ def compute_laplacian_of_gaussian(gray, ksize=5, sigma=1.0):
     Process:
     1. Apply Gaussian blur to reduce noise
     2. Apply Laplacian operator to detect edges
+    3. Preserve signed response for zero-crossing detection
     
     Returns:
-        log_viz: LoG response (normalized to 0-255)
+        log_viz: LoG response (normalized to 0-255, preserving zero-crossings)
     """
     # Gaussian blur
     blurred = cv2.GaussianBlur(gray, (ksize, ksize), sigmaX=sigma, sigmaY=sigma)
     
-    # Laplacian
+    # Laplacian - preserve signed response for zero-crossings
     log_response = cv2.Laplacian(blurred, cv2.CV_64F, ksize=ksize)
     
-    # Normalize for visualization
-    log_abs = np.abs(log_response)
-    log_viz = cv2.normalize(log_abs, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    # CRITICAL FIX: Normalize the FULL SIGNED response (not absolute value)
+    # This preserves zero-crossings which are the actual edges in LoG
+    # Map from [min_val, max_val] to [0, 255] preserving the sign information
+    log_viz = cv2.normalize(log_response, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     
     return log_viz
 
