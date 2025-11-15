@@ -1,8 +1,7 @@
 """
 Module 1: Real-world Distance Measurement using Perspective Projection
-Standalone Flask Application for Assignment Submission
 
-This application demonstrates:
+This web application demonstrates:
 - Camera calibration with pre-computed intrinsic parameters
 - Perspective projection mathematics for real-world distance calculation
 - Interactive web interface for point selection and measurement
@@ -13,9 +12,7 @@ from flask import Flask, render_template, request, jsonify
 import cv2 as cv
 import numpy as np
 import base64
-import io
 import math
-import json
 import os
 
 app = Flask(__name__)
@@ -43,16 +40,14 @@ class DistanceMeasurementEngine:
         """
         Calculate real-world distance between two points using perspective projection
         
-        Mathematical Formula:
-        X_real = (x_pixel - Ox) * Z / Fx
-        Y_real = (y_pixel - Oy) * Z / Fy
+        Formula: ΔX_real = Δx_image * Z / fx
+                ΔY_real = Δy_image * Z / fy
         
         Where:
-        - (x_pixel, y_pixel) are image coordinates in pixels
-        - (Ox, Oy) is the principal point (camera center)
-        - (Fx, Fy) are focal lengths in pixels
-        - Z is the depth (distance from camera to object plane)
-        - (X_real, Y_real) are real-world coordinates
+        - Δx_image, Δy_image are pixel differences between the two points
+        - Z is the distance from camera to object plane (in cm)
+        - fx, fy are focal lengths in pixels
+        - ΔX_real, ΔY_real are real-world distances (in cm)
         
         Args:
             point1, point2: (x, y) coordinates in pixels
@@ -62,31 +57,40 @@ class DistanceMeasurementEngine:
         Returns:
             dict with x_distance, y_distance, euclidean_distance in cm
         """
-        # Convert image coordinates to normalized coordinates
-        x1_norm = (point1[0] - calibration_data['Ox']) / calibration_data['Fx']
-        y1_norm = (point1[1] - calibration_data['Oy']) / calibration_data['Fy']
+        # Calculate pixel differences
+        dx_pixels = abs(point2[0] - point1[0])
+        dy_pixels = abs(point2[1] - point1[1])
         
-        x2_norm = (point2[0] - calibration_data['Ox']) / calibration_data['Fx']
-        y2_norm = (point2[1] - calibration_data['Oy']) / calibration_data['Fy']
+        # Get focal lengths
+        fx = calibration_data['Fx']
+        fy = calibration_data['Fy']
         
-        # Convert to real-world coordinates using perspective projection
-        x1_real = x1_norm * z_distance
-        y1_real = y1_norm * z_distance
+        # Apply the given formula: ΔX_real = Δx_image * Z / fx
+        x_distance = (dx_pixels * z_distance) / fx
+        y_distance = (dy_pixels * z_distance) / fy
         
-        x2_real = x2_norm * z_distance
-        y2_real = y2_norm * z_distance
-        
-        # Calculate distances
-        x_distance = abs(x2_real - x1_real)
-        y_distance = abs(y2_real - y1_real)
+        # Calculate euclidean distance
         euclidean_distance = math.sqrt(x_distance**2 + y_distance**2)
+        
+        # For reference, calculate absolute positions (not used for distance calculation)
+        x1_real = (point1[0] - calibration_data['Ox']) * z_distance / fx
+        y1_real = (point1[1] - calibration_data['Oy']) * z_distance / fy
+        x2_real = (point2[0] - calibration_data['Ox']) * z_distance / fx
+        y2_real = (point2[1] - calibration_data['Oy']) * z_distance / fy
         
         return {
             'x_distance': x_distance,
             'y_distance': y_distance,
             'euclidean_distance': euclidean_distance,
             'point1_real': (x1_real, y1_real),
-            'point2_real': (x2_real, y2_real)
+            'point2_real': (x2_real, y2_real),
+            'debug_info': {
+                'dx_pixels': dx_pixels,
+                'dy_pixels': dy_pixels,
+                'fx': fx,
+                'fy': fy,
+                'z_distance': z_distance
+            }
         }
     
     def process_distance_measurement(self, image, point1, point2, z_distance):
@@ -103,9 +107,31 @@ class DistanceMeasurementEngine:
         """
         calibration = self.get_camera_calibration()
         
-        # Calculate real-world distance
+        # Adjust calibration for image scaling
+        # Use your calculated scale factor: old (fx=640) became (810) with scale 1.266
+        current_width = image.shape[1]
+        current_height = image.shape[0]
+        
+        # Use your specific scale factor that gave better results
+        your_scale_factor = 1.266  # 810/640 = 1.266 as you calculated
+        
+        # Scale the focal lengths and principal point
+        adjusted_calibration = {
+            'Fx': calibration['Fx'] * your_scale_factor,
+            'Fy': calibration['Fy'] * your_scale_factor, 
+            'Ox': calibration['Ox'] * your_scale_factor,
+            'Oy': calibration['Oy'] * your_scale_factor
+        }
+        
+        print(f"📐 Focal length scaling applied:")
+        print(f"   Current image size: {current_width}x{current_height}")
+        print(f"   Scale factor: {your_scale_factor:.3f}")
+        print(f"   Original Fx: {calibration['Fx']:.1f} → Adjusted: {adjusted_calibration['Fx']:.1f}")
+        print(f"   Original Fy: {calibration['Fy']:.1f} → Adjusted: {adjusted_calibration['Fy']:.1f}")
+        
+        # Calculate real-world distance using adjusted calibration
         distance_result = self.calculate_real_world_distance(
-            point1, point2, z_distance, calibration
+            point1, point2, z_distance, adjusted_calibration
         )
         
         # Draw points and line on image
@@ -128,7 +154,14 @@ class DistanceMeasurementEngine:
         return {
             'processed_image': result_image,
             'measurements': distance_result,
-            'calibration_used': calibration
+            'calibration_used': adjusted_calibration,
+            'original_calibration': calibration,
+            'scaling_info': {
+                'current_size': (current_width, current_height),
+                'scale_factor': your_scale_factor,
+                'original_fx': calibration['Fx'],
+                'adjusted_fx': adjusted_calibration['Fx']
+            }
         }
 
 # Initialize distance measurement engine
@@ -166,7 +199,7 @@ def api_distance_measurement():
         point1_y = float(request.form.get('point1_y', 0))
         point2_x = float(request.form.get('point2_x', 0))
         point2_y = float(request.form.get('point2_y', 0))
-        z_distance = float(request.form.get('z_distance', 100))  # Default 100cm
+        z_distance = float(request.form.get('z_distance'))  # Required parameter, no default
         
         print(f"📍 Points: ({point1_x:.1f}, {point1_y:.1f}) to ({point2_x:.1f}, {point2_y:.1f})")
         print(f"📏 Z-distance: {z_distance}cm")

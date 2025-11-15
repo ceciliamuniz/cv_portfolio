@@ -56,6 +56,12 @@ python app.py
 ### Step 3: Access the Web Interface
 Open your browser and navigate to: `http://localhost:5001`
 
+## Demo Video
+
+![Application Demo](demo-recording.mp4)
+
+*Live demonstration of the distance measurement application showing image upload, point selection, and real-time distance calculation.*
+
 ## Usage Instructions
 
 1. **Upload Image**: Click "Choose Image File" or drag & drop an image
