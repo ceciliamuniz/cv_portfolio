@@ -350,42 +350,7 @@ recovered_image = results['recovered']
 - **NumPy 1.24.3**: Array operations and FFT computations
 - **Matplotlib 3.7.2**: Plotting backend (non-GUI mode)
 
-## 🎓 Educational Objectives
 
-This module demonstrates:
 
-1. **Template Matching Theory**: Understanding normalized cross-correlation and its applications
-2. **Convolution Operations**: 2D convolution for image filtering and blur operations
-3. **Frequency Domain Processing**: FFT-based operations for efficient image processing
-4. **Inverse Problems**: Deconvolution and recovery techniques in computer vision
-5. **Quality Assessment**: Quantitative evaluation using PSNR metrics
-6. **Web Integration**: Practical deployment of computer vision algorithms
-
-## 📝 Academic Context
-
-Suitable for computer vision courses covering:
-- Object detection and template matching
-- Image filtering and convolution
-- Frequency domain analysis
-- Deconvolution and image restoration
-- Performance evaluation metrics
-
-## 🤝 Contributing
-
-This is an academic project. Suggestions for improvements:
-- Multi-scale template matching
-- Advanced deconvolution algorithms
-- Real-time processing optimizations
-- Additional quality metrics (SSIM, etc.)
-
-## 📄 License
-
-Academic use only. Developed for Computer Vision coursework.
-
-## 🆘 Support
-
-For technical issues:
-1. Check troubleshooting section above
-2. Verify all dependencies are correctly installed
-3. Ensure proper file permissions and directory structure
-4. Review console output for detailed error messages
+---
+**Author**: Cecilia Muniz Siqueira
