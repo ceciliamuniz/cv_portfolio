@@ -173,7 +173,5 @@ Simple connectivity test endpoint
 - Client-side validation ensures proper user input
 
 ---
-**Author**: Computer Vision Student  
-**Course**: Computer Vision Assignment - Module 1  
-**Date**: October 2025  
+**Author**: Cecilia Muniz Siqueira
 **Technology Stack**: Python, Flask, OpenCV, Bootstrap, JavaScript
