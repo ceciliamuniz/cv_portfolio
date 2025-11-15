@@ -174,4 +174,3 @@ Simple connectivity test endpoint
 
 ---
 **Author**: Cecilia Muniz Siqueira
-**Technology Stack**: Python, Flask, OpenCV, Bootstrap, JavaScript
