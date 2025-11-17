@@ -5,6 +5,7 @@ Detect ArUco markers on non-rectangular object boundaries and segment the object
 
 import cv2 as cv
 import numpy as np
+import cv2.aruco as aruco
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 import json
@@ -23,6 +24,13 @@ class ArucoSegmentation:
         # Initialize ArUco dictionary and parameters
         self.aruco_dict = cv.aruco.getPredefinedDictionary(aruco_dict_type)
         self.aruco_params = cv.aruco.DetectorParameters()
+        
+        # Adjust parameters for better detection of various marker sizes
+        self.aruco_params.adaptiveThreshWinSizeMin = 3
+        self.aruco_params.adaptiveThreshWinSizeMax = 53
+        self.aruco_params.minMarkerPerimeterRate = 0.01
+        self.aruco_params.maxMarkerPerimeterRate = 4.0
+        
         self.detector = cv.aruco.ArucoDetector(self.aruco_dict, self.aruco_params)
         
     def detect_markers(self, image: np.ndarray) -> Tuple[List, List, List]:
@@ -81,8 +89,12 @@ class ArucoSegmentation:
         h, w = image.shape[:2]
         mask = np.zeros((h, w), dtype=np.uint8)
         
-        if len(marker_centers) < 3:
-            return mask, {"error": "Need at least 3 markers for segmentation"}
+        if len(marker_centers) < 2:
+            return mask, {"error": "Need at least 2 markers for segmentation"}
+        
+        # Special handling for 2 markers - create expanded bounding region
+        if len(marker_centers) == 2:
+            return self._segment_with_two_markers(image, marker_centers)
         
         metrics = {
             "num_markers": len(marker_centers),
@@ -154,6 +166,176 @@ class ArucoSegmentation:
         
         return mask, metrics
     
+    def aruco_segment_object_simple(self, image_bgr: np.ndarray) -> Tuple[np.ndarray, str]:
+        """
+        Streamlined ArUco segmentation using convex hull + GrabCut.
+        Detects ArUco markers, finds the convex hull around them, 
+        and segments the object using GrabCut within the convex hull ROI.
+        
+        Args:
+            image_bgr: Input BGR image
+            
+        Returns:
+            Tuple of (segmentation_visualization, status_message)
+        """
+        if image_bgr is None:
+            return None, "Error: Image not loaded."
+
+        # Convert to grayscale for marker detection and processing
+        gray = cv.cvtColor(image_bgr, cv.COLOR_BGR2GRAY)
+        
+        # 1. Detect ArUco Markers using DICT_4X4_1000 (best performance from comprehensive test)
+        aruco_dict = aruco.getPredefinedDictionary(aruco.DICT_4X4_1000)
+        parameters = aruco.DetectorParameters()
+        
+        # Optimized parameters for DICT_4X4_1000 to reduce false positives
+        parameters.adaptiveThreshWinSizeMin = 5
+        parameters.adaptiveThreshWinSizeMax = 23
+        parameters.adaptiveThreshWinSizeStep = 4
+        parameters.adaptiveThreshConstant = 7
+        
+        # More restrictive contour filtering
+        parameters.minMarkerPerimeterRate = 0.02  # More restrictive
+        parameters.maxMarkerPerimeterRate = 4.0   # More restrictive  
+        parameters.polygonalApproxAccuracyRate = 0.03
+        parameters.minCornerDistanceRate = 0.05   # More restrictive
+        parameters.minDistanceToBorder = 3
+        
+        # Enable corner refinement for accuracy
+        parameters.cornerRefinementMethod = aruco.CORNER_REFINE_SUBPIX
+        parameters.cornerRefinementWinSize = 5
+        
+        # Higher quality thresholds
+        parameters.minOtsuStdDev = 5.0           # More restrictive
+        parameters.errorCorrectionRate = 0.6
+        
+        detector = aruco.ArucoDetector(aruco_dict, parameters)
+        corners, ids, rejectedImgPoints = detector.detectMarkers(gray)
+        
+        if ids is None or len(ids) < 2:
+            return image_bgr, f"Not enough markers found (found {len(ids) if ids is not None else 0}, requires at least 2)."
+
+        # 2. Define the Object's Convex Hull (Boundary ROI)
+        all_points = []
+        for corner in corners:
+            # Add all four corner points of the marker to the list
+            all_points.extend(corner[0].astype(int).tolist())
+        
+        all_points = np.array(all_points)
+        
+        # Find the convex hull of all marker points
+        hull_points = cv.convexHull(all_points)
+
+        # 3. Create a Bounding Box and Mask for GrabCut
+        x, y, w, h = cv.boundingRect(hull_points)
+        
+        # Ensure the ROI is safe (within image bounds)
+        x = max(0, x)
+        y = max(0, y)
+        w = min(image_bgr.shape[1] - x, w)
+        h = min(image_bgr.shape[0] - y, h)
+        
+        # Initialize the GrabCut mask
+        mask = np.zeros(image_bgr.shape[:2], np.uint8)
+        
+        # Define the GrabCut rectangle [x, y, width, height]
+        rect = (x, y, w, h)
+        
+        # 4. Run GrabCut Segmentation
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+
+        try:
+            # Run GrabCut
+            cv.grabCut(image_bgr, mask, rect, bgdModel, fgdModel, 5, cv.GC_INIT_WITH_RECT)
+            
+            # Create the final mask where only foreground and probable foreground are kept
+            final_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+            
+            # Apply the mask to the original image
+            segmentation_viz = image_bgr * final_mask[:, :, np.newaxis]
+            
+            # Draw the convex hull boundary and detected markers
+            cv.polylines(segmentation_viz, [hull_points], isClosed=True, color=(0, 255, 255), thickness=3)
+            
+            # Draw detected markers
+            if len(corners) > 0:
+                aruco.drawDetectedMarkers(segmentation_viz, corners, ids)
+            
+            return segmentation_viz, f"Success: Detected {len(ids)} markers. Segmented using GrabCut."
+            
+        except Exception as e:
+            return image_bgr, f"GrabCut failed: {str(e)}"
+    
+    def _segment_with_two_markers(self, image: np.ndarray, marker_centers: np.ndarray):
+        """
+        Segment object using only 2 markers by creating expanded bounding region.
+        
+        Args:
+            image: Input image
+            marker_centers: Array of 2 marker center points
+            
+        Returns:
+            Tuple of (segmentation_mask, metrics_dict)
+        """
+        h, w = image.shape[:2]
+        mask = np.zeros((h, w), dtype=np.uint8)
+        
+        # Calculate distance between markers and create expanded rectangle
+        p1, p2 = marker_centers[0], marker_centers[1]
+        center = (p1 + p2) / 2
+        
+        # Create rectangle perpendicular to marker line
+        direction = p2 - p1
+        perpendicular = np.array([-direction[1], direction[0]])
+        
+        # Normalize and scale
+        if np.linalg.norm(perpendicular) > 0:
+            perpendicular = perpendicular / np.linalg.norm(perpendicular)
+        
+        marker_distance = np.linalg.norm(direction)
+        expansion = marker_distance * 0.8  # Expand by 80% of marker distance
+        
+        # Create 4 corners of expanded rectangle
+        corners = np.array([
+            center + direction * 0.6 + perpendicular * expansion,
+            center + direction * 0.6 - perpendicular * expansion,
+            center - direction * 0.6 - perpendicular * expansion,
+            center - direction * 0.6 + perpendicular * expansion
+        ], dtype=np.int32)
+        
+        # Ensure corners are within image bounds
+        corners[:, 0] = np.clip(corners[:, 0], 0, w-1)
+        corners[:, 1] = np.clip(corners[:, 1], 0, h-1)
+        
+        # Fill the polygon
+        cv.fillPoly(mask, [corners], 255)
+        
+        # Try to refine with GrabCut if possible
+        try:
+            x, y, rw, rh = cv.boundingRect(corners)
+            rect = (x, y, rw, rh)
+            
+            grabcut_mask = np.zeros((h, w), dtype=np.uint8)
+            grabcut_mask[mask == 255] = cv.GC_PR_FGD
+            
+            bgd_model = np.zeros((1, 65), dtype=np.float64)
+            fgd_model = np.zeros((1, 65), dtype=np.float64)
+            
+            cv.grabCut(image, grabcut_mask, rect, bgd_model, fgd_model, 2, cv.GC_INIT_WITH_MASK)
+            mask = np.where((grabcut_mask == cv.GC_FGD) | (grabcut_mask == cv.GC_PR_FGD), 255, 0).astype(np.uint8)
+        except:
+            pass  # Keep original mask if GrabCut fails
+        
+        metrics = {
+            "num_markers": 2,
+            "method": "two_marker_rectangle",
+            "area_pixels": int(np.sum(mask == 255)),
+            "perimeter_pixels": int(cv.arcLength(corners, True))
+        }
+        
+        return mask, metrics
+    
     def visualize_segmentation(self,
                               image: np.ndarray,
                               corners: List,
@@ -202,14 +384,14 @@ class ArucoSegmentation:
     def process_image(self, 
                      image_path: Path,
                      output_dir: Path,
-                     method: str = 'convex_hull') -> Dict:
+                     method: str = 'simple') -> Dict:
         """
-        Process a single image: detect markers, segment object, save results.
+        Process a single image using simplified ArUco segmentation.
         
         Args:
             image_path: Path to input image
             output_dir: Directory to save outputs
-            method: Segmentation method to use
+            method: Segmentation method (now uses 'simple' by default)
             
         Returns:
             Dictionary with processing results and metrics
@@ -219,46 +401,36 @@ class ArucoSegmentation:
         if image is None:
             return {"error": f"Failed to read image: {image_path}"}
         
-        # Detect markers
-        corners, ids, rejected = self.detect_markers(image)
+        # Use simplified ArUco segmentation
+        segmentation_viz, status = self.aruco_segment_object_simple(image)
         
-        if ids is None or len(ids) == 0:
-            return {
+        # Parse results
+        if "Success" in status:
+            # Extract number of markers from status message
+            import re
+            marker_match = re.search(r'Detected (\d+) markers', status)
+            markers_detected = int(marker_match.group(1)) if marker_match else 0
+            
+            result = {
+                "image": image_path.name,
+                "markers_detected": markers_detected,
+                "method": "simple_grabcut",
+                "status": status
+            }
+        else:
+            result = {
                 "image": image_path.name,
                 "markers_detected": 0,
-                "error": "No ArUco markers detected"
+                "error": status
             }
         
-        # Get marker centers
-        marker_centers = self.get_marker_centers(corners)
+        # Save segmentation result if successful
+        if "Success" in status:
+            vis_path = output_dir / f"{image_path.stem}_segmentation.jpg"
+            cv.imwrite(str(vis_path), segmentation_viz)
+            result["output_path"] = str(vis_path)
         
-        # Segment object
-        mask, metrics = self.segment_object(image, marker_centers, method)
-        
-        # Create visualization
-        vis = self.visualize_segmentation(image, corners, ids, mask, marker_centers)
-        
-        # Save outputs
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Save mask
-        mask_path = output_dir / f"{image_path.stem}_mask.png"
-        cv.imwrite(str(mask_path), mask)
-        
-        # Save visualization
-        vis_path = output_dir / f"{image_path.stem}_segmentation.jpg"
-        cv.imwrite(str(vis_path), vis)
-        
-        # Compile results
-        results = {
-            "image": image_path.name,
-            "markers_detected": len(ids),
-            "marker_ids": ids.flatten().tolist() if ids is not None else [],
-            "method": method,
-            **metrics,
-            "mask_saved": str(mask_path),
-            "visualization_saved": str(vis_path)
-        }
+        return result
         
         return results
 
@@ -280,12 +452,15 @@ def process_all_images(images_dir: Path,
     segmenter = ArucoSegmentation()
     results = []
     
-    # Find all image files
+    # Find all image files (remove duplicates from case-insensitive matching)
     image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.bmp']
     image_files = []
     for ext in image_extensions:
         image_files.extend(images_dir.glob(ext))
         image_files.extend(images_dir.glob(ext.upper()))
+    
+    # Remove duplicates (Windows is case-insensitive)
+    image_files = list(set(image_files))
     
     print(f"Found {len(image_files)} images to process")
     
@@ -299,8 +474,9 @@ def process_all_images(images_dir: Path,
         # Print summary
         if "error" not in result:
             print(f"  ✓ Markers detected: {result['markers_detected']}")
-            print(f"  ✓ Area: {result['area_pixels']:.0f} pixels")
-            print(f"  ✓ Perimeter: {result['perimeter_pixels']:.1f} pixels")
+            print(f"  ✓ Method: {result.get('method', 'simple_grabcut')}")
+            if 'output_path' in result:
+                print(f"  ✓ Saved: {result['output_path']}")
         else:
             print(f"  ✗ Error: {result['error']}")
     
@@ -356,11 +532,11 @@ if __name__ == "__main__":
     output_dir = script_dir / "outputs"
     markers_dir = script_dir / "aruco_markers"
     
-    # Generate ArUco markers for printing
-    print("=" * 80)
-    print("STEP 1: Generating ArUco Markers")
-    print("=" * 80)
-    generate_aruco_markers(markers_dir, marker_ids=list(range(20)))
+    # Generate ArUco markers for printing (DISABLED - using user's custom markers)
+    # print("=" * 80)
+    # print("STEP 1: Generating ArUco Markers")
+    # print("=" * 80)
+    # generate_aruco_markers(markers_dir, marker_ids=list(range(20)))
     
     # Process images if they exist
     if images_dir.exists() and any(images_dir.iterdir()):

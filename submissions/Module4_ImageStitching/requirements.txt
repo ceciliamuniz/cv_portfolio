@@ -1,3 +1,17 @@
-flask
-opencv-python
-numpy
+# Module 4: Advanced Image Stitching Requirements
+# Author: Cecilia Muniz Siqueira
+
+# Core Dependencies
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0  # Required for SIFT comparison
+numpy>=1.19.0
+flask>=2.0.0
+
+# Additional utilities
+pathlib2>=2.3.5; python_version<"3.4"  # Backport for older Python
+pillow>=8.0.0  # Image format support
+matplotlib>=3.3.0  # Optional: for visualization and debugging
+
+# Development and testing
+pytest>=6.0.0  # For unit testing
+pytest-cov>=2.10.0  # Coverage reporting

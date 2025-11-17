@@ -1,0 +1,56 @@
+[
+  {
+    "image": "IMG_3789.jpeg",
+    "markers_detected": 2,
+    "method": "simple_grabcut",
+    "status": "Success: Detected 2 markers. Segmented using GrabCut.",
+    "output_path": "C:\\Users\\cecil\\OneDrive\\CompVision\\CV_Module2\\submissions\\Module3\\part4_aruco_segmentation\\outputs\\convex_hull\\IMG_3789_segmentation.jpg"
+  },
+  {
+    "image": "IMG_3790.jpeg",
+    "markers_detected": 3,
+    "method": "simple_grabcut",
+    "status": "Success: Detected 3 markers. Segmented using GrabCut.",
+    "output_path": "C:\\Users\\cecil\\OneDrive\\CompVision\\CV_Module2\\submissions\\Module3\\part4_aruco_segmentation\\outputs\\convex_hull\\IMG_3790_segmentation.jpg"
+  },
+  {
+    "image": "IMG_3791.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3792.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 1, requires at least 2)."
+  },
+  {
+    "image": "IMG_3793.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3794.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3795.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3796.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3797.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  },
+  {
+    "image": "IMG_3798.jpeg",
+    "markers_detected": 0,
+    "error": "Not enough markers found (found 0, requires at least 2)."
+  }
+]

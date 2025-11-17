@@ -16,7 +16,7 @@ def ensure_gray(img: np.ndarray) -> np.ndarray:
     return img
 
 
-def detect_aruco_markers(img: np.ndarray, dict_type=cv2.aruco.DICT_4X4_50) -> Tuple[List, List, List]:
+def detect_aruco_markers(img: np.ndarray, dict_type=cv2.aruco.DICT_6X6_50) -> Tuple[List, List, List]:
     """
     Detect ArUco markers in an image using OpenCV's built-in detection.
     
@@ -233,7 +233,7 @@ def draw_segmentation_result(img: np.ndarray, mask: np.ndarray, boundary: np.nda
 
 
 def generate_aruco_marker(marker_id: int, size: int = 200, 
-                          dict_type=cv2.aruco.DICT_4X4_50) -> np.ndarray:
+                          dict_type=cv2.aruco.DICT_6X6_50) -> np.ndarray:
     """
     Generate an ArUco marker image for printing.
     
