@@ -19,13 +19,34 @@
                         <button id="stopBtn" class="btn btn-danger ms-2">Stop Tracker</button>
                     </div>
                     <div id="sam2-upload" style="display:none;">
-                        <label for="sam2file" class="form-label">Upload SAM2 NPZ Mask:</label>
-                        <input type="file" id="sam2file" class="form-control" accept=".npz">
-                        <button id="uploadBtn" class="btn btn-secondary mt-2">Upload Mask</button>
+                        <div class="mb-3">
+                            <label class="form-label">SAM2 Mask Options:</label>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="maskOption" id="dummyMask" value="dummy" checked>
+                                <label class="form-check-label" for="dummyMask">
+                                    Use Dummy Mask (Circular center mask)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="maskOption" id="uploadMask" value="upload">
+                                <label class="form-check-label" for="uploadMask">
+                                    Upload NPZ Mask File
+                                </label>
+                            </div>
+                        </div>
+                        <div id="upload-section" style="display:none;">
+                            <label for="sam2file" class="form-label">Upload SAM2 NPZ Mask:</label>
+                            <input type="file" id="sam2file" class="form-control" accept=".npz">
+                            <button id="uploadBtn" class="btn btn-secondary mt-2">Upload Mask</button>
+                        </div>
+                    </div>
+                    <div id="selection-hint" style="display:none;" class="alert alert-info">
+                        <i class="fas fa-mouse-pointer"></i> Click and drag on the video to select the object you want to track
                     </div>
                     <div class="mt-4 position-relative d-flex justify-content-center" style="width:100%;">
                         <video id="video" width="640" height="480" autoplay muted class="border rounded"></video>
-                        <canvas id="overlay" width="640" height="480" style="position:absolute;top:0;left:0;"></canvas>
+                        <canvas id="overlay" width="640" height="480" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+                        <canvas id="selection" width="640" height="480" style="position:absolute;top:0;left:0;cursor:crosshair;display:none;"></canvas>
                     </div>
                     <div class="mt-3">
                         <span id="status" class="text-success"></span>
@@ -40,7 +61,10 @@
 <script>
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
+const selection = document.getElementById('selection');
+const selectionHint = document.getElementById('selection-hint');
 const ctx = overlay.getContext('2d');
+const selectionCtx = selection.getContext('2d');
 const modeSelect = document.getElementById('mode');
 const initBtn = document.getElementById('initBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -50,20 +74,192 @@ const uploadBtn = document.getElementById('uploadBtn');
 const statusSpan = document.getElementById('status');
 let tracking = false;
 let trackerMode = 'marker';
+let stream = null;
+
+// Mouse selection variables
+let isSelecting = false;
+let startX = 0, startY = 0, endX = 0, endY = 0;
+let userBoundingBox = null;
 
 modeSelect.addEventListener('change', () => {
     trackerMode = modeSelect.value;
     sam2UploadDiv.style.display = trackerMode === 'sam2' ? 'block' : 'none';
+    
+    // Show selection canvas and hint for markerless mode
+    if (trackerMode === 'markerless') {
+        selection.style.display = 'block';
+        selectionHint.style.display = 'block';
+        statusSpan.textContent = '🖱️ Select markerless mode - click and drag to select object';
+    } else {
+        selection.style.display = 'none';
+        selectionHint.style.display = 'none';
+        userBoundingBox = null; // Reset selection
+        clearSelection();
+    }
+});
+
+// Handle mask option toggle
+const dummyMaskRadio = document.getElementById('dummyMask');
+const uploadMaskRadio = document.getElementById('uploadMask');
+const uploadSection = document.getElementById('upload-section');
+
+dummyMaskRadio.addEventListener('change', () => {
+    if (dummyMaskRadio.checked) {
+        uploadSection.style.display = 'none';
+        statusSpan.textContent = '🎯 Dummy mask selected (circular center mask)';
+    }
+});
+
+uploadMaskRadio.addEventListener('change', () => {
+    if (uploadMaskRadio.checked) {
+        uploadSection.style.display = 'block';
+        statusSpan.textContent = '📁 Upload your own SAM2 NPZ mask file';
+    }
+});
+
+// Mouse selection functions for markerless tracking
+function clearSelection() {
+    selectionCtx.clearRect(0, 0, selection.width, selection.height);
+}
+
+function drawSelection(x1, y1, x2, y2) {
+    clearSelection();
+    selectionCtx.strokeStyle = '#ff0000';
+    selectionCtx.lineWidth = 2;
+    selectionCtx.setLineDash([5, 5]);
+    selectionCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+}
+
+// Mouse event handlers for selection canvas
+selection.addEventListener('mousedown', (e) => {
+    if (trackerMode !== 'markerless' || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    isSelecting = true;
+    clearSelection();
+});
+
+selection.addEventListener('mousemove', (e) => {
+    if (!isSelecting || trackerMode !== 'markerless' || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    drawSelection(startX, startY, endX, endY);
+});
+
+selection.addEventListener('mouseup', (e) => {
+    if (!isSelecting || trackerMode !== 'markerless' || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    
+    // Calculate bounding box (x, y, width, height)
+    const x = Math.min(startX, endX);
+    const y = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+    
+    if (width > 10 && height > 10) { // Minimum size check
+        userBoundingBox = [x, y, width, height];
+        console.log('User selected bounding box:', userBoundingBox);
+        statusSpan.textContent = `✅ Selected region: ${width}x${height} at (${x},${y}) - Click Init Tracker to start`;
+        
+        // Draw final selection
+        clearSelection();
+        selectionCtx.strokeStyle = '#00ff00';
+        selectionCtx.lineWidth = 3;
+        selectionCtx.setLineDash([]);
+        selectionCtx.strokeRect(x, y, width, height);
+    } else {
+        statusSpan.textContent = '❌ Selection too small - please select a larger area';
+        clearSelection();
+    }
+    
+    isSelecting = false;
 });
 
 initBtn.onclick = async () => {
-    statusSpan.textContent = `🎯 Initializing ${trackerMode} tracker...`;
-    tracking = true;
+    // For markerless tracking without selection, start camera first
+    if (trackerMode === 'markerless' && !userBoundingBox && !tracking) {
+        statusSpan.textContent = '📹 Starting camera for selection...';
+        statusSpan.style.color = '#007bff';
+        
+        try {
+            // Start camera stream first
+            await startStreaming();
+            
+            // Show selection canvas over the video
+            selection.style.display = 'block';
+            statusSpan.textContent = '🖱️ Click and drag to select an object to track, then click Init Tracker again';
+            statusSpan.style.color = '#17a2b8';
+            
+            return; // Wait for user selection
+        } catch (error) {
+            statusSpan.textContent = `❌ Camera failed: ${error.message}`;
+            statusSpan.style.color = '#dc3545';
+            return;
+        }
+    }
+    
+    let maskInfo = '';
+    let maskOption = 'dummy';
+    if (trackerMode === 'sam2') {
+        maskOption = document.querySelector('input[name="maskOption"]:checked')?.value || 'dummy';
+        maskInfo = maskOption === 'dummy' ? ' (using dummy mask)' : ' (using uploaded mask)';
+    }
+    
+    statusSpan.textContent = `🎯 Initializing ${trackerMode} tracker${maskInfo}...`;
     
     try {
+        // Prepare initialization data
+        const initData = {
+            mode: trackerMode,
+            mask_option: maskOption
+        };
+        
+        // Add bounding box for markerless tracking
+        if (trackerMode === 'markerless' && userBoundingBox) {
+            initData.bbox = userBoundingBox;
+            console.log('Adding bounding box to request:', userBoundingBox);
+        } else if (trackerMode === 'markerless') {
+            console.log('No userBoundingBox available, userBoundingBox =', userBoundingBox);
+        }
+        
+        console.log('Sending init request with data:', initData);
+        
+        // Initialize backend tracker
+        const response = await fetch('/module5/api/track/init', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(initData)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Backend initialization failed');
+        }
+        
+        const data = await response.json();
+        console.log('Backend initialized:', data);
+        
+        // Start camera stream
         await startStreaming();
-        statusSpan.textContent = `✅ Tracker initialized (${trackerMode}) - Ready to track!`;
+        tracking = true;
+        
+        // Hide selection canvas when tracking starts
+        if (trackerMode === 'markerless') {
+            selection.style.display = 'none';
+            selectionHint.style.display = 'none';
+        }
+        
+        statusSpan.textContent = `✅ Tracker initialized (${trackerMode}${maskInfo}) - Detecting markers!`;
+        
     } catch (error) {
+        console.error('Initialization error:', error);
         statusSpan.textContent = `❌ Failed to initialize: ${error.message}`;
         tracking = false;
     }
@@ -71,14 +267,41 @@ initBtn.onclick = async () => {
 
 stopBtn.onclick = async () => {
     tracking = false;
-    statusSpan.textContent = '⏹️ Tracker stopped';
+    statusSpan.textContent = '⏹️ Stopping tracker...';
+    
+    try {
+        // Stop backend tracking
+        const response = await fetch('/module5/api/track/stop', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        
+        if (response.ok) {
+            statusSpan.textContent = '⏹️ Tracker stopped successfully';
+        } else {
+            statusSpan.textContent = '⏹️ Tracker stopped (backend warning)';
+        }
+    } catch (error) {
+        console.error('Stop tracking error:', error);
+        statusSpan.textContent = '⏹️ Tracker stopped (offline mode)';
+    }
+    
+    // Clear overlay
     ctx.clearRect(0, 0, overlay.width, overlay.height);
+    
+    // Show selection canvas again for markerless mode
+    if (trackerMode === 'markerless') {
+        selection.style.display = 'block';
+        selectionHint.style.display = 'block';
+        clearSelection(); // Clear any existing selection
+    }
     
     // Stop video stream
     if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
         video.srcObject = null;
     }
+    stream = null;
 };
 
 uploadBtn.onclick = async () => {
@@ -99,31 +322,90 @@ async function startStreaming() {
         statusSpan.textContent = 'Webcam not supported';
         return;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({video: true});
+    stream = await navigator.mediaDevices.getUserMedia({video: true});
     video.srcObject = stream;
     requestAnimationFrame(processFrame);
 }
 
 async function processFrame() {
-    if (!tracking) return;
+    if (!tracking || !video.videoWidth || !video.videoHeight) {
+        requestAnimationFrame(processFrame);
+        return;
+    }
     
-    // Simple mock tracking - just display the video feed with overlay text
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    try {
+        // Capture current video frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        // Convert to base64 (reduce quality for faster processing)
+        const frameData = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+        
+        // Convert base64 back to blob for backend
+        const byteCharacters = atob(frameData);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Send raw image bytes to backend (as expected by the API)
+        const response = await fetch('/module5/api/track', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream'
+            },
+            body: byteArray
+        });
+        
+        if (response.ok) {
+            // Backend returns raw JPEG bytes
+            const imageBlob = await response.blob();
+            const imageUrl = URL.createObjectURL(imageBlob);
+            
+            // Display the processed frame with ArUco markers overlaid
+            const img = new Image();
+            img.onload = function() {
+                // Clear overlay and draw processed frame
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+                ctx.drawImage(img, 0, 0, overlay.width, overlay.height);
+                
+                // Add status overlay
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+                ctx.fillRect(10, 10, 200, 25);
+                ctx.fillStyle = 'black';
+                ctx.font = '14px Arial';
+                ctx.fillText(`${trackerMode}: Active`, 15, 27);
+                
+                // Clean up the object URL
+                URL.revokeObjectURL(imageUrl);
+            };
+            img.src = imageUrl;
+        } else {
+            // Backend error
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.fillRect(10, 10, 200, 25);
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.fillText(`${trackerMode}: Backend Error`, 15, 27);
+        }
+        
+    } catch (error) {
+        console.error('Frame processing error:', error);
+        // Show error overlay
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.fillRect(10, 10, 200, 25);
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.fillText(`${trackerMode}: Connection Error`, 15, 27);
+    }
     
-    // Add tracking mode indicator
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    ctx.fillRect(10, 10, 200, 30);
-    ctx.fillStyle = 'white';
-    ctx.font = '16px Arial';
-    ctx.fillText(`Tracking Mode: ${trackerMode}`, 15, 30);
-    
-    // Add frame counter
-    ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-    ctx.fillRect(10, 50, 150, 25);
-    ctx.fillStyle = 'black';
-    ctx.font = '14px Arial';
-    ctx.fillText(`Status: Active`, 15, 67);
-    
+    // Continue the frame processing loop
     requestAnimationFrame(processFrame);
 }
 </script>
