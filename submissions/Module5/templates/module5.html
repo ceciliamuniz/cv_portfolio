@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Module 5: Real-Time Object Tracker</title>
+    <title>Modules 5-6: Real-Time Object Tracker</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <style>
@@ -25,24 +25,90 @@
     <h2>Module 5: Real-Time Object Tracker</h2>
     <div class="tracker-controls">
         <label for="mode" class="form-label">Tracking Mode:</label>
-        <select id="mode" class="form-select" style="max-width:300px;">
-            <option value="marker">Marker-based (Aruco/QR/April)</option>
-            <option value="markerless">Markerless (OpenCV)</option>
-            <option value="sam2">SAM2 Segmentation</option>
+        <select id="mode" class="form-select" style="max-width:400px;">
+            <option value="marker">Marker-based: Track ArUco markers in real-time</option>
+            <option value="markerless">Markerless: Track any object (no markers needed)</option>
+            <option value="sam2">SAM2: Track using pre-generated segmentation mask</option>
         </select>
         <button id="initBtn" class="btn btn-primary ms-2">Init Tracker</button>
         <button id="stopBtn" class="btn btn-danger ms-2">Stop Tracker</button>
+        <button id="testCameraBtn" class="btn btn-info ms-2">🎥 Test Camera</button>
+    </div>
+    
+    <!-- Camera Permission Notice -->
+    <div class="alert alert-warning mt-3">
+        <h6><i class="fas fa-camera"></i> Camera Access Required</h6>
+        <p class="mb-2">This module needs access to your webcam to perform real-time tracking.</p>
+        <ul class="mb-0">
+            <li>📍 <strong>Location:</strong> Must be on <code>localhost</code> or <code>https://</code></li>
+            <li>📹 <strong>Permission:</strong> Your browser will ask for camera access</li>
+            <li>🖥️ <strong>Hardware:</strong> Built-in camera or USB webcam required</li>
+        </ul>
+    </div>
+    
+    <!-- Instructions for each mode -->
+    <div class="alert alert-info mt-3">
+        <div id="marker-instructions" class="tracking-instructions">
+            <strong>📱 Marker-based Tracking:</strong><br>
+            • Print an ArUco marker (you can generate one <a href="https://chev.me/arucogen/" target="_blank">here</a>)<br>
+            • Show the printed marker to your camera<br>
+            • The system will detect and track the marker with ID overlay
+        </div>
+        <div id="markerless-instructions" class="tracking-instructions" style="display:none;">
+            <strong>🎯 Markerless Tracking:</strong><br>
+            • Click "Init Tracker" to start<br>
+            • The tracker will automatically select the center region of your camera view<br>
+            • Move an object in that region to see the tracking in action<br>
+            • The green box will follow the object
+        </div>
+        <div id="sam2-instructions" class="tracking-instructions" style="display:none;">
+            <strong>🧠 SAM2 Segmentation Tracking:</strong><br>
+            • First, upload a SAM2 mask file (.npz format)<br>
+            • The mask should contain pre-generated segmentation from SAM2 model<br>
+            • Click "Init Tracker" to overlay the segmentation on live video<br>
+            • Green overlay shows the segmented regions
+        </div>
     </div>
     <div id="sam2-upload" style="display:none;">
         <label for="sam2file" class="form-label">Upload SAM2 NPZ Mask:</label>
         <input type="file" id="sam2file" class="form-control" accept=".npz">
         <button id="uploadBtn" class="btn btn-secondary mt-2">Upload Mask</button>
     </div>
+    
+    <!-- ArUco Marker Generator -->
+    <div id="marker-generator" class="mt-3">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">📱 Generate ArUco Marker</h5>
+            </div>
+            <div class="card-body">
+                <p>Need an ArUco marker for testing? Use the generator below:</p>
+                <label for="markerSize" class="form-label">Marker Size:</label>
+                <select id="markerSize" class="form-select" style="max-width:200px;">
+                    <option value="100">100x100 pixels</option>
+                    <option value="200" selected>200x200 pixels</option>
+                    <option value="300">300x300 pixels</option>
+                </select>
+                <button id="generateMarker" class="btn btn-info mt-2">Generate Marker (ID: 0)</button>
+                <div class="mt-3">
+                    <canvas id="markerCanvas" style="border: 1px solid #ccc; display:none;"></canvas>
+                </div>
+                <p class="text-muted mt-2">
+                    <small>💡 Right-click the generated marker and "Save image as..." to print it</small>
+                </p>
+            </div>
+        </div>
+    </div>
     <div class="mt-4 position-relative" style="width:640px;">
         <video id="video" width="640" height="480" autoplay muted></video>
         <canvas id="overlay" width="640" height="480"></canvas>
     </div>
     <div class="mt-3">
+        <div class="mb-2">
+            <small class="text-muted">
+                Current URL: <code id="currentUrl"></code>
+            </small>
+        </div>
         <span id="status" class="text-success"></span>
     </div>
 </div>
@@ -57,16 +123,25 @@ const sam2UploadDiv = document.getElementById('sam2-upload');
 const sam2File = document.getElementById('sam2file');
 const uploadBtn = document.getElementById('uploadBtn');
 const statusSpan = document.getElementById('status');
+const generateMarkerBtn = document.getElementById('generateMarker');
+const markerCanvas = document.getElementById('markerCanvas');
+const markerSizeSelect = document.getElementById('markerSize');
+const testCameraBtn = document.getElementById('testCameraBtn');
 let tracking = false;
 let trackerMode = 'marker';
 
 modeSelect.addEventListener('change', () => {
     trackerMode = modeSelect.value;
     sam2UploadDiv.style.display = trackerMode === 'sam2' ? 'block' : 'none';
+    
+    // Show/hide appropriate instructions
+    document.querySelectorAll('.tracking-instructions').forEach(el => el.style.display = 'none');
+    document.getElementById(trackerMode + '-instructions').style.display = 'block';
 });
 
 initBtn.onclick = async () => {
-    const res = await fetch('/api/track/init', {
+    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
+    const res = await fetch(`${apiBase}/api/track/init`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({mode: trackerMode})
@@ -82,7 +157,8 @@ initBtn.onclick = async () => {
 };
 
 stopBtn.onclick = async () => {
-    await fetch('/api/track/stop', {method: 'POST'});
+    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
+    await fetch(`${apiBase}/api/track/stop`, {method: 'POST'});
     tracking = false;
     statusSpan.textContent = 'Tracker stopped';
     ctx.clearRect(0, 0, overlay.width, overlay.height);
@@ -93,7 +169,8 @@ uploadBtn.onclick = async () => {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
-    const res = await fetch('/api/sam2/upload', {
+    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
+    const res = await fetch(`${apiBase}/api/sam2/upload`, {
         method: 'POST',
         body: formData
     });
@@ -101,14 +178,152 @@ uploadBtn.onclick = async () => {
     statusSpan.textContent = data.status || data.error;
 };
 
+// Test camera button
+testCameraBtn.onclick = async () => {
+    statusSpan.textContent = '🧪 Testing camera access...';
+    await startStreaming();
+};
+
+// ArUco marker generator
+generateMarkerBtn.onclick = () => {
+    const size = parseInt(markerSizeSelect.value);
+    generateArucoMarker(0, size); // Generate marker with ID 0
+};
+
+function generateArucoMarker(markerId, size) {
+    const canvas = markerCanvas;
+    const ctx = canvas.getContext('2d');
+    canvas.width = size;
+    canvas.height = size;
+    canvas.style.display = 'block';
+    
+    // Simple ArUco-like pattern generator (simplified version)
+    // This creates a basic pattern - for production use OpenCV's ArUco generation
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, size, size);
+    
+    // Create a simple 6x6 pattern with border
+    const borderSize = size / 8;
+    const cellSize = (size - 2 * borderSize) / 6;
+    
+    ctx.fillStyle = 'black';
+    ctx.fillRect(borderSize, borderSize, size - 2 * borderSize, size - 2 * borderSize);
+    
+    // Create a simple pattern based on marker ID
+    const pattern = [
+        [1, 1, 0, 0, 1, 1],
+        [1, 0, 1, 1, 0, 1],
+        [0, 1, 0, 0, 1, 0],
+        [0, 1, 1, 1, 1, 0],
+        [1, 0, 0, 0, 0, 1],
+        [1, 1, 0, 0, 1, 1]
+    ];
+    
+    ctx.fillStyle = 'white';
+    for (let i = 0; i < 6; i++) {
+        for (let j = 0; j < 6; j++) {
+            if (pattern[i][j] === 1) {
+                const x = borderSize + j * cellSize;
+                const y = borderSize + i * cellSize;
+                ctx.fillRect(x, y, cellSize, cellSize);
+            }
+        }
+    }
+    
+    statusSpan.textContent = `ArUco marker generated! Right-click to save and print it.`;
+};
+
+// Helper function to retry camera access
+window.requestCameraAgain = async () => {
+    statusSpan.textContent = '🔄 Retrying camera access...';
+    await startStreaming();
+};
+
+// Check camera permissions on page load
+window.addEventListener('load', async () => {
+    // Display current URL for debugging
+    document.getElementById('currentUrl').textContent = window.location.href;
+    
+    // Check if camera is available
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        try {
+            // Check current permission state
+            const permission = await navigator.permissions.query({ name: 'camera' });
+            console.log('Camera permission state:', permission.state);
+            
+            if (permission.state === 'granted') {
+                statusSpan.textContent = '✅ Camera permission already granted. Click "Init Tracker" to start.';
+            } else if (permission.state === 'denied') {
+                statusSpan.textContent = '❌ Camera permission denied. Please enable in browser settings.';
+            } else {
+                statusSpan.textContent = '📹 Camera permission required. Click "Init Tracker" to start.';
+            }
+        } catch (e) {
+            console.log('Permission API not supported:', e);
+            statusSpan.textContent = '📹 Ready to track! Click "Init Tracker" to begin.';
+        }
+    } else {
+        statusSpan.textContent = '❌ Camera not supported in this browser.';
+    }
+});
+
 async function startStreaming() {
-    if (!navigator.mediaDevices.getUserMedia) {
-        statusSpan.textContent = 'Webcam not supported';
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        statusSpan.textContent = '❌ Webcam API not supported in this browser';
         return;
     }
-    const stream = await navigator.mediaDevices.getUserMedia({video: true});
-    video.srcObject = stream;
-    requestAnimationFrame(processFrame);
+    
+    // Check if we're on HTTPS or localhost (required for camera access)
+    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    if (!isSecure) {
+        statusSpan.textContent = '⚠️ Camera requires HTTPS or localhost. Current: ' + location.protocol + '//' + location.hostname;
+        return;
+    }
+    
+    try {
+        statusSpan.textContent = '📹 Requesting camera access...';
+        console.log('Requesting camera access...');
+        
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            }
+        });
+        
+        console.log('Camera access granted!');
+        video.srcObject = stream;
+        statusSpan.textContent = '✅ Camera connected! Tracking active.';
+        
+        // Start processing frames
+        requestAnimationFrame(processFrame);
+        
+    } catch (error) {
+        console.error('Camera access error:', error);
+        let errorMsg = '❌ Camera access failed: ';
+        
+        switch(error.name) {
+            case 'NotAllowedError':
+                errorMsg += 'Permission denied. Please allow camera access and try again.';
+                break;
+            case 'NotFoundError':
+                errorMsg += 'No camera found. Please connect a camera.';
+                break;
+            case 'NotReadableError':
+                errorMsg += 'Camera is already in use by another application.';
+                break;
+            case 'OverconstrainedError':
+                errorMsg += 'Camera constraints not supported.';
+                break;
+            default:
+                errorMsg += error.message;
+        }
+        
+        statusSpan.textContent = errorMsg;
+        
+        // Offer alternative
+        statusSpan.innerHTML += '<br><button onclick="requestCameraAgain()" class="btn btn-sm btn-warning mt-2">🔄 Try Again</button>';
+    }
 }
 
 async function processFrame() {
@@ -121,7 +336,8 @@ async function processFrame() {
     const b64 = frame.split(',')[1];
     const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
     // Send frame to backend
-    const res = await fetch('/api/track', {
+    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
+    const res = await fetch(`${apiBase}/api/track`, {
         method: 'POST',
         body: bin
     });

@@ -55,19 +55,35 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(RESULTS_FOLDER, exist_ok=True)
 
 # --- Module 3 (Advanced Image Analysis) integration ---
-# Register the Module 3 blueprint if available
+# Register the Module 3 blueprint if available (with better error handling)
 try:
     import sys as _sys
     _module3_path = Path(__file__).parent / 'submissions' / 'Module3' / 'web_integration'
     if _module3_path.exists():
         _sys.path.insert(0, str(_module3_path))
-        from routes import module3_bp  # type: ignore
-        app.register_blueprint(module3_bp)
-        print("[INFO] Module 3 blueprint registered at /module3")
+        try:
+            from routes import module3_bp  # type: ignore
+            app.register_blueprint(module3_bp)
+            print("[INFO] Module 3 blueprint registered at /module3")
+        except (ImportError, KeyboardInterrupt) as e:
+            print(f"[WARN] Module 3 blueprint failed to load (missing dependencies): {type(e).__name__}")
+            # Continue without Module 3 if dependencies are missing
     else:
         print("[INFO] Module 3 web integration not found at:", _module3_path)
 except Exception as e:
     print("[WARN] Failed to register Module 3 blueprint:", e)
+
+# --- Module 5 (Real-time Object Tracker) integration ---
+_module5_path = Path(__file__).parent / 'submissions' / 'Module5'
+try:
+    if _module5_path.exists():
+        from submissions.Module5.app import module5_bp
+        app.register_blueprint(module5_bp, url_prefix='/module5')
+        print("[INFO] Module 5 blueprint registered at /module5")
+    else:
+        print("[INFO] Module 5 not found at:", _module5_path)
+except Exception as e:
+    print(f"[WARN] Failed to register Module 5 blueprint: {e}")
 
 class ComputerVisionEngine:
     def __init__(self):
@@ -498,94 +514,21 @@ def api_test():
     print("🧪 Test API called")
     return jsonify({"status": "working", "message": "API is responding"})
 
+@app.route('/debug/routes')
+def debug_routes():
+    """Debug endpoint to show all registered routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': rule.rule
+        })
+    return jsonify({"routes": routes, "total": len(routes)})
 
-@app.route('/module5')
-def module5_page():
-    return render_template('module5.html')
 
 if __name__ == '__main__':
     print("🚀 Starting Computer Vision Portfolio Website...")
     print("📁 Make sure you have images/templates/ and images/scenes/ folders")
     print("🌐 Visit: http://localhost:5000")
     app.run(debug=True, use_reloader=False)
-
-# --- Module 5: Real-time Object Tracker ---
-import threading
-
-# Global tracker state
-tracker = None
-tracker_mode = None
-sam2_mask = None
-tracking_active = False
-lock = threading.Lock()
-
-@app.route('/api/track/init', methods=['POST'])
-def track_init():
-    global tracker, tracker_mode, tracking_active
-    data = request.json
-    mode = data.get('mode')
-    tracking_active = True
-    if mode == 'marker':
-        tracker_mode = 'marker'
-        # Marker-based tracker setup (Aruco/QR/April)
-        # TODO: Initialize marker detector
-    elif mode == 'markerless':
-        tracker_mode = 'markerless'
-        # Markerless tracker setup (OpenCV tracker)
-        # TODO: Initialize OpenCV tracker
-    elif mode == 'sam2':
-        tracker_mode = 'sam2'
-        # SAM2 mask-based tracking
-        # TODO: Load mask if available
-    else:
-        return jsonify({'error': 'Invalid mode'}), 400
-    return jsonify({'status': 'initialized', 'mode': tracker_mode})
-
-@app.route('/api/track', methods=['POST'])
-def track():
-    global tracker, tracker_mode, sam2_mask, tracking_active
-    if not tracking_active:
-        return jsonify({'error': 'Tracker not initialized'}), 400
-    frame = np.frombuffer(request.data, np.uint8)
-    frame = cv.imdecode(frame, cv.IMREAD_COLOR)
-    overlay = None
-    if tracker_mode == 'marker':
-        # Marker detection and overlay
-        # TODO: Detect marker and draw overlay
-        pass
-    elif tracker_mode == 'markerless':
-        # Markerless tracking and overlay
-        # TODO: Track object and draw overlay
-        pass
-    elif tracker_mode == 'sam2':
-        # Use sam2_mask for overlay
-        # TODO: Overlay mask on frame
-        pass
-    else:
-        return jsonify({'error': 'Invalid tracker mode'}), 400
-    # Return overlay (dummy response for now)
-    _, buf = cv.imencode('.jpg', frame)
-    return buf.tobytes(), 200, {'Content-Type': 'image/jpeg'}
-
-@app.route('/api/track/stop', methods=['POST'])
-def track_stop():
-    global tracking_active
-    tracking_active = False
-    return jsonify({'status': 'stopped'})
-
-@app.route('/api/sam2/upload', methods=['POST'])
-def sam2_upload():
-    global sam2_mask
-    file = request.files['file']
-    sam2_mask = np.load(file)
-    return jsonify({'status': 'mask uploaded'})
-
-@app.route('/api/sam2/mask', methods=['GET'])
-def sam2_mask_get():
-    global sam2_mask
-    if sam2_mask is None:
-        return jsonify({'error': 'No mask uploaded'}), 400
-    # Return mask as image (dummy response)
-    mask_img = (sam2_mask * 255).astype(np.uint8)
-    _, buf = cv.imencode('.png', mask_img)
-    return buf.tobytes(), 200, {'Content-Type': 'image/png'}
