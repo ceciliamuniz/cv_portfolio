@@ -23,18 +23,20 @@ import os
 app = Flask(__name__)
 
 # --- Module 4 (Image Stitching) integration ---
-import sys as _sys
-from pathlib import Path
-_module4_path = Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'
-try:
-    if _module4_path.exists():
-        from submissions.Module4_ImageStitching.app import module4_bp
-        app.register_blueprint(module4_bp, url_prefix='/module4')
-        print("[INFO] Module 4 blueprint registered at /module4")
-    else:
-        print("[INFO] Module 4 not found at:", _module4_path)
-except Exception as e:
-    print("[WARN] Failed to register Module 4 blueprint:", e)
+# Temporarily disabled blueprint to use direct route instead
+# import sys as _sys
+# from pathlib import Path
+# _module4_path = Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'
+# try:
+#     if _module4_path.exists():
+#         from submissions.Module4_ImageStitching.app import module4_bp
+#         app.register_blueprint(module4_bp, url_prefix='/module4')
+#         print("[INFO] Module 4 blueprint registered at /module4")
+#     else:
+#         print("[INFO] Module 4 not found at:", _module4_path)
+# except Exception as e:
+#     print("[WARN] Failed to register Module 4 blueprint:", e)
+print("[INFO] Module 4 using direct route instead of blueprint")
 
 # --- Module 7 (Stereo Size Estimation) integration ---
 _module7_part1_path = Path(__file__).parent / 'submissions' / 'Module7' / 'part1_stereosize'
@@ -345,6 +347,12 @@ def module2_part1():
 def module2_part2():
     """Module 2 Part 2: Gaussian Blur and Fourier Transform Recovery"""
     return render_template('part2_blur_recovery.html')
+
+@app.route('/module4/')
+@app.route('/module4')
+def module4_direct():
+    """Module 4: Image Stitching - Direct route using main template"""
+    return render_template('module4.html')
 
 @app.route('/api/template-matching', methods=['POST'])
 def api_template_matching():

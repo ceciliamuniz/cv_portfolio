@@ -229,10 +229,15 @@ def validate_images(images, min_images=4):
 @module4_bp.route('')  # This handles /module4 without trailing slash
 def index():
     try:
-        return render_template('index.html')
+        # Use a more specific template path to avoid conflicts
+        template_path = Path(__file__).parent / 'templates' / 'index.html'
+        if template_path.exists():
+            return render_template('index.html')
+        else:
+            return f"<h1>Module 4: Image Stitching</h1><p>Template not found at: {template_path}</p>"
     except Exception as e:
         # If template fails, return a simple error message
-        return f"<h1>Module 4: Image Stitching</h1><p>Template error: {str(e)}</p>"
+        return f"<h1>Module 4: Image Stitching</h1><p>Template error: {str(e)}</p><p>Blueprint template folder: {module4_bp.template_folder}</p>"
 
 
 
