@@ -208,24 +208,82 @@ def track():
                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         
             elif tracker_mode == 'sam2':
-                # SAM2 segmentation overlay
+                # SAM2 segmentation with tracking overlay
                 if sam2_mask is not None:
-                    if sam2_mask.shape[:2] != (h, w):
-                        mask_resized = cv2.resize(sam2_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+                    if initial_frame_data is None:
+                        # Check if we have a user-selected bounding box for SAM2 tracking
+                        if user_bbox and len(user_bbox) == 4:
+                            # Initialize tracker with user selection
+                            initial_frame_data = True
+                            bbox = tuple(int(coord) for coord in user_bbox)
+                            print(f"[DEBUG] SAM2 mode using user-selected bbox: {bbox}")
+                            
+                            # Initialize tracker for SAM2 mode
+                            try:
+                                sam2_tracker = cv2.TrackerMIL_create()
+                                sam2_tracker.init(frame, bbox)
+                                tracker = sam2_tracker  # Store tracker reference
+                                print("[DEBUG] SAM2 tracker initialized successfully")
+                            except Exception as e:
+                                print(f"[DEBUG] SAM2 tracker init failed: {e}")
+                        else:
+                            # Show instruction to select region for SAM2 tracking
+                            cv2.putText(frame, 'SAM2 Mode: Select region with mouse first, then reinitialize', 
+                                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                            cv2.putText(frame, 'The mask will follow your selected object', 
+                                       (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
                     else:
-                        mask_resized = sam2_mask
-                    
-                    mask_colored = np.zeros_like(frame)
-                    mask_indices = mask_resized > 0.5
-                    mask_colored[mask_indices] = [200, 200, 0]  # Light teal
-                    
-                    alpha = 0.5
-                    frame = cv2.addWeighted(frame, 1 - alpha, mask_colored, alpha, 0)
-                    
-                    cv2.putText(frame, 'SAM2 Mask Overlay Active', (10, 30), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 0), 2)
+                        # Tracking phase - update tracker and move mask accordingly
+                        if tracker is not None:
+                            success, bbox = tracker.update(frame)
+                            
+                            if success:
+                                # Get current tracked position
+                                (x, y, bw, bh) = [int(v) for v in bbox]
+                                
+                                # Create mask at tracked position
+                                mask_at_position = np.zeros((h, w), dtype=np.float32)
+                                
+                                # Create circular mask centered in the tracked bounding box
+                                center_x = x + bw // 2
+                                center_y = y + bh // 2
+                                radius = min(bw, bh) // 3
+                                
+                                cv2.circle(mask_at_position, (center_x, center_y), radius, 1.0, -1)
+                                
+                                # Apply mask overlay
+                                mask_colored = np.zeros_like(frame)
+                                mask_indices = mask_at_position > 0.5
+                                mask_colored[mask_indices] = [0, 200, 200]  # Yellow-green mask
+                                
+                                alpha = 0.4
+                                frame = cv2.addWeighted(frame, 1 - alpha, mask_colored, alpha, 0)
+                                
+                                # Draw tracking box
+                                cv2.rectangle(frame, (x, y), (x + bw, y + bh), (0, 255, 255), 2)
+                                cv2.putText(frame, 'SAM2 Tracking + Mask', (x, y - 10), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                            else:
+                                cv2.putText(frame, 'SAM2 Tracking Lost - Reinitialize', (10, 30), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        else:
+                            # Fallback: static mask overlay
+                            if sam2_mask.shape[:2] != (h, w):
+                                mask_resized = cv2.resize(sam2_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+                            else:
+                                mask_resized = sam2_mask
+                            
+                            mask_colored = np.zeros_like(frame)
+                            mask_indices = mask_resized > 0.5
+                            mask_colored[mask_indices] = [200, 200, 0]  # Light teal
+                            
+                            alpha = 0.5
+                            frame = cv2.addWeighted(frame, 1 - alpha, mask_colored, alpha, 0)
+                            
+                            cv2.putText(frame, 'SAM2 Static Mask (no tracking)', (10, 30), 
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 0), 2)
                 else:
-                    cv2.putText(frame, 'No SAM2 mask uploaded!', (10, 30), 
+                    cv2.putText(frame, 'No SAM2 mask - using dummy mode!', (10, 30), 
                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         except Exception as e:

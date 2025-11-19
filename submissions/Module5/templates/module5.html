@@ -5,34 +5,66 @@
     <title>Modules 5-6: Real-Time Object Tracker</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         #video, #overlay {
             max-width: 100%;
             border: 1px solid #ccc;
         }
-        #overlay {
+        #overlay, #selection {
             position: absolute;
             top: 0; left: 0;
+        }
+        #overlay {
             pointer-events: none;
         }
         .tracker-controls {
             margin-bottom: 1em;
         }
+        .position-relative {
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
 <div class="container py-4">
-    <h2>Module 5: Real-Time Object Tracker</h2>
+    <h2><i class="fas fa-crosshairs me-2"></i>Module 5: Real-Time Object Tracker [UPDATED]</h2>
     <div class="tracker-controls">
         <label for="mode" class="form-label">Tracking Mode:</label>
-        <select id="mode" class="form-select" style="max-width:400px;">
-            <option value="marker">Marker-based: Track ArUco markers in real-time</option>
-            <option value="markerless">Markerless: Track any object (no markers needed)</option>
-            <option value="sam2">SAM2: Track using pre-generated segmentation mask</option>
+        <select id="mode" class="form-select d-inline-block w-auto" style="max-width:300px;">
+            <option value="marker">Marker-based (ArUco)</option>
+            <option value="markerless">Markerless (OpenCV)</option>
+            <option value="sam2">SAM2 Segmentation</option>
         </select>
         <button id="initBtn" class="btn btn-primary ms-2">Init Tracker</button>
         <button id="stopBtn" class="btn btn-danger ms-2">Stop Tracker</button>
-        <button id="testCameraBtn" class="btn btn-info ms-2">🎥 Test Camera</button>
+    </div>
+    
+    <div id="sam2-upload" style="display:none;">
+        <div class="mb-3">
+            <label class="form-label">SAM2 Mask Options:</label>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="maskOption" id="dummyMask" value="dummy" checked>
+                <label class="form-check-label" for="dummyMask">
+                    Use Dummy Mask (Circular center mask)
+                </label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="maskOption" id="uploadMask" value="upload">
+                <label class="form-check-label" for="uploadMask">
+                    Upload NPZ Mask File
+                </label>
+            </div>
+        </div>
+        <div id="upload-section" style="display:none;">
+            <label for="sam2file" class="form-label">Upload SAM2 NPZ Mask:</label>
+            <input type="file" id="sam2file" class="form-control" accept=".npz">
+            <button id="uploadBtn" class="btn btn-secondary mt-2">Upload Mask</button>
+        </div>
+    </div>
+    
+    <div id="selection-hint" style="display:none;" class="alert alert-info">
+        <i class="fas fa-mouse-pointer"></i> Click and drag on the video to select the object you want to track
     </div>
     
     <!-- Camera Permission Notice -->
@@ -99,23 +131,22 @@
             </div>
         </div>
     </div>
-    <div class="mt-4 position-relative" style="width:640px;">
-        <video id="video" width="640" height="480" autoplay muted></video>
-        <canvas id="overlay" width="640" height="480"></canvas>
+    <div class="mt-4 position-relative d-flex justify-content-center" style="width:100%;">
+        <video id="video" width="640" height="480" autoplay muted class="border rounded"></video>
+        <canvas id="overlay" width="640" height="480" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+        <canvas id="selection" width="640" height="480" style="position:absolute;top:0;left:0;cursor:crosshair;display:none;z-index:10;"></canvas>
     </div>
     <div class="mt-3">
-        <div class="mb-2">
-            <small class="text-muted">
-                Current URL: <code id="currentUrl"></code>
-            </small>
-        </div>
-        <span id="status" class="text-success"></span>
+        <span id="status" class="text-success">Ready - Select tracking mode and click Init Tracker</span>
     </div>
 </div>
 <script>
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
+const selection = document.getElementById('selection');
+const selectionHint = document.getElementById('selection-hint');
 const ctx = overlay.getContext('2d');
+const selectionCtx = selection.getContext('2d');
 const modeSelect = document.getElementById('mode');
 const initBtn = document.getElementById('initBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -123,45 +154,256 @@ const sam2UploadDiv = document.getElementById('sam2-upload');
 const sam2File = document.getElementById('sam2file');
 const uploadBtn = document.getElementById('uploadBtn');
 const statusSpan = document.getElementById('status');
-const generateMarkerBtn = document.getElementById('generateMarker');
-const markerCanvas = document.getElementById('markerCanvas');
-const markerSizeSelect = document.getElementById('markerSize');
-const testCameraBtn = document.getElementById('testCameraBtn');
 let tracking = false;
 let trackerMode = 'marker';
+let stream = null;
+
+// Mouse selection variables
+let isSelecting = false;
+let startX = 0, startY = 0, endX = 0, endY = 0;
+let userBoundingBox = null;
 
 modeSelect.addEventListener('change', () => {
     trackerMode = modeSelect.value;
     sam2UploadDiv.style.display = trackerMode === 'sam2' ? 'block' : 'none';
     
-    // Show/hide appropriate instructions
-    document.querySelectorAll('.tracking-instructions').forEach(el => el.style.display = 'none');
-    document.getElementById(trackerMode + '-instructions').style.display = 'block';
+    // Show selection canvas and hint for markerless and SAM2 modes
+    if (trackerMode === 'markerless' || trackerMode === 'sam2') {
+        selection.style.display = 'block';
+        selection.style.cursor = 'crosshair';
+        selection.style.pointerEvents = 'auto';
+        selectionHint.style.display = 'block';
+        statusSpan.textContent = '🖱️ ' + trackerMode + ' mode selected - click and drag to select object';
+    } else {
+        selection.style.display = 'none';
+        selectionHint.style.display = 'none';
+        userBoundingBox = null; // Reset selection
+        clearSelection();
+        statusSpan.textContent = 'Marker-based tracking selected - show ArUco marker to camera';
+    }
+});
+
+// Handle mask option toggle
+const dummyMaskRadio = document.getElementById('dummyMask');
+const uploadMaskRadio = document.getElementById('uploadMask');
+const uploadSection = document.getElementById('upload-section');
+
+if (dummyMaskRadio) {
+    dummyMaskRadio.addEventListener('change', () => {
+        if (dummyMaskRadio.checked) {
+            uploadSection.style.display = 'none';
+            // Keep selection enabled when dummy mask is selected in SAM2 mode
+            if (trackerMode === 'sam2') {
+                selection.style.display = 'block';
+                selection.style.cursor = 'crosshair';
+                selection.style.pointerEvents = 'auto';
+                selectionHint.style.display = 'block';
+                statusSpan.textContent = '🎯 SAM2 dummy mask - click and drag to select object';
+            } else {
+                statusSpan.textContent = '🎯 Dummy mask selected (circular center mask)';
+            }
+        }
+    });
+}
+
+if (uploadMaskRadio) {
+    uploadMaskRadio.addEventListener('change', () => {
+        if (uploadMaskRadio.checked) {
+            uploadSection.style.display = 'block';
+            // Disable selection when file upload is chosen
+            selection.style.display = 'none';
+            selection.style.pointerEvents = 'none';
+            selectionHint.style.display = 'none';
+            statusSpan.textContent = '📁 Upload your own SAM2 NPZ mask file';
+        }
+    });
+}
+
+// Mouse selection functions for markerless tracking
+function clearSelection() {
+    selectionCtx.clearRect(0, 0, selection.width, selection.height);
+}
+
+function drawSelection(x1, y1, x2, y2) {
+    clearSelection();
+    selectionCtx.strokeStyle = '#ff0000';
+    selectionCtx.lineWidth = 2;
+    selectionCtx.setLineDash([5, 5]);
+    selectionCtx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+}
+
+// Mouse event handlers for selection canvas
+selection.addEventListener('mousedown', (e) => {
+    if ((trackerMode !== 'markerless' && trackerMode !== 'sam2') || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    isSelecting = true;
+    clearSelection();
+});
+
+selection.addEventListener('mousemove', (e) => {
+    if (!isSelecting || ((trackerMode !== 'markerless' && trackerMode !== 'sam2')) || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    drawSelection(startX, startY, endX, endY);
+});
+
+selection.addEventListener('mouseup', (e) => {
+    if (!isSelecting || ((trackerMode !== 'markerless' && trackerMode !== 'sam2')) || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    
+    // Calculate bounding box (x, y, width, height)
+    const x = Math.min(startX, endX);
+    const y = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+    
+    if (width > 10 && height > 10) { // Minimum size check
+        userBoundingBox = [x, y, width, height];
+        console.log('User selected bounding box:', userBoundingBox);
+        statusSpan.textContent = `✅ Selected region: ${width}x${height} at (${x},${y}) - Click Init Tracker to start`;
+        
+        // Draw final selection
+        clearSelection();
+        selectionCtx.strokeStyle = '#00ff00';
+        selectionCtx.lineWidth = 3;
+        selectionCtx.setLineDash([]);
+        selectionCtx.strokeRect(x, y, width, height);
+    } else {
+        statusSpan.textContent = '❌ Selection too small - please select a larger area';
+        clearSelection();
+    }
+    
+    isSelecting = false;
 });
 
 initBtn.onclick = async () => {
-    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
-    const res = await fetch(`${apiBase}/api/track/init`, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({mode: trackerMode})
-    });
-    const data = await res.json();
-    if (data.status === 'initialized') {
-        statusSpan.textContent = `Tracker initialized (${trackerMode})`;
+    // For markerless/SAM2 tracking without selection, start camera first
+    if ((trackerMode === 'markerless' || trackerMode === 'sam2') && !userBoundingBox && !tracking) {
+        statusSpan.textContent = '📹 Starting camera for selection...';
+        statusSpan.style.color = '#007bff';
+        
+        try {
+            // Start camera stream first
+            await startStreaming();
+            
+            // Show selection canvas over the video
+            selection.style.display = 'block';
+            statusSpan.textContent = '🖱️ Click and drag to select an object to track, then click Init Tracker again';
+            statusSpan.style.color = '#17a2b8';
+            
+            return; // Wait for user selection
+        } catch (error) {
+            statusSpan.textContent = `❌ Camera failed: ${error.message}`;
+            statusSpan.style.color = '#dc3545';
+            return;
+        }
+    }
+    
+    let maskInfo = '';
+    let maskOption = 'dummy';
+    if (trackerMode === 'sam2') {
+        maskOption = document.querySelector('input[name="maskOption"]:checked')?.value || 'dummy';
+        maskInfo = maskOption === 'dummy' ? ' (using dummy mask)' : ' (using uploaded mask)';
+    }
+    
+    statusSpan.textContent = `🎯 Initializing ${trackerMode} tracker${maskInfo}...`;
+    
+    try {
+        // Prepare initialization data
+        const initData = {
+            mode: trackerMode,
+            mask_option: maskOption
+        };
+        
+        // Add bounding box for markerless/SAM2 tracking
+        if ((trackerMode === 'markerless' || trackerMode === 'sam2') && userBoundingBox) {
+            initData.bbox = userBoundingBox;
+            console.log('Adding bounding box to request:', userBoundingBox);
+        } else if ((trackerMode === 'markerless' || trackerMode === 'sam2')) {
+            console.log('No userBoundingBox available, userBoundingBox =', userBoundingBox);
+        }
+        
+        console.log('Sending init request with data:', initData);
+        
+        // Initialize backend tracker
+        const response = await fetch('/module5/api/track/init', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(initData)
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Backend initialization failed');
+        }
+        
+        const data = await response.json();
+        console.log('Backend initialized:', data);
+        
+        // Start camera stream
+        await startStreaming();
         tracking = true;
-        startStreaming();
-    } else {
-        statusSpan.textContent = data.error || 'Failed to initialize tracker';
+        
+        // Hide selection canvas when tracking starts
+        if (trackerMode === 'markerless' || trackerMode === 'sam2') {
+            selection.style.display = 'none';
+            selectionHint.style.display = 'none';
+        }
+        
+        statusSpan.textContent = `✅ Tracker initialized (${trackerMode}${maskInfo}) - Tracking active!`;
+        
+    } catch (error) {
+        console.error('Initialization error:', error);
+        statusSpan.textContent = `❌ Failed to initialize: ${error.message}`;
+        tracking = false;
     }
 };
 
 stopBtn.onclick = async () => {
-    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
-    await fetch(`${apiBase}/api/track/stop`, {method: 'POST'});
     tracking = false;
-    statusSpan.textContent = 'Tracker stopped';
+    statusSpan.textContent = '⏹️ Stopping tracker...';
+    
+    try {
+        // Stop backend tracking
+        const response = await fetch('/module5/api/track/stop', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        
+        if (response.ok) {
+            statusSpan.textContent = '⏹️ Tracker stopped successfully';
+        } else {
+            statusSpan.textContent = '⏹️ Tracker stopped (backend warning)';
+        }
+    } catch (error) {
+        console.error('Stop tracking error:', error);
+        statusSpan.textContent = '⏹️ Tracker stopped (offline mode)';
+    }
+    
+    // Clear overlay
     ctx.clearRect(0, 0, overlay.width, overlay.height);
+    
+    // Show selection canvas again for markerless/SAM2 mode
+    if (trackerMode === 'markerless' || trackerMode === 'sam2') {
+        selection.style.display = 'block';
+        selectionHint.style.display = 'block';
+        clearSelection(); // Clear any existing selection
+    }
+    
+    // Stop video stream
+    if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+    }
+    stream = null;
 };
 
 uploadBtn.onclick = async () => {
@@ -169,8 +411,7 @@ uploadBtn.onclick = async () => {
     if (!file) return;
     const formData = new FormData();
     formData.append('file', file);
-    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
-    const res = await fetch(`${apiBase}/api/sam2/upload`, {
+    const res = await fetch('/module5/api/sam2/upload', {
         method: 'POST',
         body: formData
     });
@@ -178,179 +419,126 @@ uploadBtn.onclick = async () => {
     statusSpan.textContent = data.status || data.error;
 };
 
-// Test camera button
-testCameraBtn.onclick = async () => {
-    statusSpan.textContent = '🧪 Testing camera access...';
-    await startStreaming();
-};
-
-// ArUco marker generator
-generateMarkerBtn.onclick = () => {
-    const size = parseInt(markerSizeSelect.value);
-    generateArucoMarker(0, size); // Generate marker with ID 0
-};
-
-function generateArucoMarker(markerId, size) {
-    const canvas = markerCanvas;
-    const ctx = canvas.getContext('2d');
-    canvas.width = size;
-    canvas.height = size;
-    canvas.style.display = 'block';
-    
-    // Simple ArUco-like pattern generator (simplified version)
-    // This creates a basic pattern - for production use OpenCV's ArUco generation
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, size, size);
-    
-    // Create a simple 6x6 pattern with border
-    const borderSize = size / 8;
-    const cellSize = (size - 2 * borderSize) / 6;
-    
-    ctx.fillStyle = 'black';
-    ctx.fillRect(borderSize, borderSize, size - 2 * borderSize, size - 2 * borderSize);
-    
-    // Create a simple pattern based on marker ID
-    const pattern = [
-        [1, 1, 0, 0, 1, 1],
-        [1, 0, 1, 1, 0, 1],
-        [0, 1, 0, 0, 1, 0],
-        [0, 1, 1, 1, 1, 0],
-        [1, 0, 0, 0, 0, 1],
-        [1, 1, 0, 0, 1, 1]
-    ];
-    
-    ctx.fillStyle = 'white';
-    for (let i = 0; i < 6; i++) {
-        for (let j = 0; j < 6; j++) {
-            if (pattern[i][j] === 1) {
-                const x = borderSize + j * cellSize;
-                const y = borderSize + i * cellSize;
-                ctx.fillRect(x, y, cellSize, cellSize);
-            }
-        }
-    }
-    
-    statusSpan.textContent = `ArUco marker generated! Right-click to save and print it.`;
-};
-
-// Helper function to retry camera access
-window.requestCameraAgain = async () => {
-    statusSpan.textContent = '🔄 Retrying camera access...';
-    await startStreaming();
-};
-
-// Check camera permissions on page load
-window.addEventListener('load', async () => {
-    // Display current URL for debugging
-    document.getElementById('currentUrl').textContent = window.location.href;
-    
-    // Check if camera is available
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        try {
-            // Check current permission state
-            const permission = await navigator.permissions.query({ name: 'camera' });
-            console.log('Camera permission state:', permission.state);
-            
-            if (permission.state === 'granted') {
-                statusSpan.textContent = '✅ Camera permission already granted. Click "Init Tracker" to start.';
-            } else if (permission.state === 'denied') {
-                statusSpan.textContent = '❌ Camera permission denied. Please enable in browser settings.';
-            } else {
-                statusSpan.textContent = '📹 Camera permission required. Click "Init Tracker" to start.';
-            }
-        } catch (e) {
-            console.log('Permission API not supported:', e);
-            statusSpan.textContent = '📹 Ready to track! Click "Init Tracker" to begin.';
-        }
-    } else {
-        statusSpan.textContent = '❌ Camera not supported in this browser.';
-    }
+// Initialize page
+window.addEventListener('load', () => {
+    statusSpan.textContent = 'Ready - Select tracking mode and click Init Tracker';
 });
 
 async function startStreaming() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        statusSpan.textContent = '❌ Webcam API not supported in this browser';
+    if (!navigator.mediaDevices.getUserMedia) {
+        statusSpan.textContent = 'Webcam not supported';
         return;
     }
-    
-    // Check if we're on HTTPS or localhost (required for camera access)
-    const isSecure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-    if (!isSecure) {
-        statusSpan.textContent = '⚠️ Camera requires HTTPS or localhost. Current: ' + location.protocol + '//' + location.hostname;
+    stream = await navigator.mediaDevices.getUserMedia({video: true});
+    video.srcObject = stream;
+    requestAnimationFrame(processFrame);
+}
+
+async function processFrame() {
+    if (!tracking || !video.videoWidth || !video.videoHeight) {
+        requestAnimationFrame(processFrame);
         return;
     }
     
     try {
-        statusSpan.textContent = '📹 Requesting camera access...';
-        console.log('Requesting camera access...');
+        // Capture current video frame
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            }
+        // Convert to base64 (reduce quality for faster processing)
+        const frameData = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+        
+        // Convert base64 back to blob for backend
+        const byteCharacters = atob(frameData);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Send raw image bytes to backend (as expected by the API)
+        const response = await fetch('/module5/api/track', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/octet-stream'
+            },
+            body: byteArray
         });
         
-        console.log('Camera access granted!');
-        video.srcObject = stream;
-        statusSpan.textContent = '✅ Camera connected! Tracking active.';
-        
-        // Start processing frames
-        requestAnimationFrame(processFrame);
-        
-    } catch (error) {
-        console.error('Camera access error:', error);
-        let errorMsg = '❌ Camera access failed: ';
-        
-        switch(error.name) {
-            case 'NotAllowedError':
-                errorMsg += 'Permission denied. Please allow camera access and try again.';
-                break;
-            case 'NotFoundError':
-                errorMsg += 'No camera found. Please connect a camera.';
-                break;
-            case 'NotReadableError':
-                errorMsg += 'Camera is already in use by another application.';
-                break;
-            case 'OverconstrainedError':
-                errorMsg += 'Camera constraints not supported.';
-                break;
-            default:
-                errorMsg += error.message;
+        if (response.ok) {
+            // Backend returns raw JPEG bytes
+            const imageBlob = await response.blob();
+            const imageUrl = URL.createObjectURL(imageBlob);
+            
+            // Display the processed frame with tracking overlays
+            const img = new Image();
+            img.onload = function() {
+                // Clear overlay and draw processed frame
+                ctx.clearRect(0, 0, overlay.width, overlay.height);
+                ctx.drawImage(img, 0, 0, overlay.width, overlay.height);
+                
+                // Add status overlay
+                ctx.fillStyle = 'rgba(0, 255, 0, 0.8)';
+                ctx.fillRect(10, 10, 200, 25);
+                ctx.fillStyle = 'black';
+                ctx.font = '14px Arial';
+                ctx.fillText(`${trackerMode}: Active`, 15, 27);
+                
+                // Clean up the object URL
+                URL.revokeObjectURL(imageUrl);
+            };
+            img.src = imageUrl;
+        } else {
+            // Backend error
+            ctx.clearRect(0, 0, overlay.width, overlay.height);
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.fillRect(10, 10, 200, 25);
+            ctx.fillStyle = 'white';
+            ctx.font = '14px Arial';
+            ctx.fillText(`${trackerMode}: Backend Error`, 15, 27);
         }
         
-        statusSpan.textContent = errorMsg;
-        
-        // Offer alternative
-        statusSpan.innerHTML += '<br><button onclick="requestCameraAgain()" class="btn btn-sm btn-warning mt-2">🔄 Try Again</button>';
+    } catch (error) {
+        console.error('Frame processing error:', error);
+        // Show error overlay
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+        ctx.fillStyle = 'rgba(255, 0, 0, 0.8)';
+        ctx.fillRect(10, 10, 200, 25);
+        ctx.fillStyle = 'white';
+        ctx.font = '14px Arial';
+        ctx.fillText(`${trackerMode}: Connection Error`, 15, 27);
+    }
+    
+    // Continue the frame processing loop
+    requestAnimationFrame(processFrame);
+}
+
+// Helper functions for better UI
+function showSelectionHint() {
+    const hint = document.getElementById('selection-hint');
+    if (hint) {
+        hint.style.display = 'block';
     }
 }
 
-async function processFrame() {
-    if (!tracking) return;
-    ctx.clearRect(0, 0, overlay.width, overlay.height);
-    // Capture frame from video
-    ctx.drawImage(video, 0, 0, overlay.width, overlay.height);
-    const frame = overlay.toDataURL('image/jpeg');
-    // Convert base64 to binary
-    const b64 = frame.split(',')[1];
-    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    // Send frame to backend
-    const apiBase = window.location.pathname.includes('/module5') ? '/module5' : '';
-    const res = await fetch(`${apiBase}/api/track`, {
-        method: 'POST',
-        body: bin
-    });
-    if (res.ok) {
-        const blob = await res.blob();
-        const img = new Image();
-        img.onload = () => {
-            ctx.clearRect(0, 0, overlay.width, overlay.height);
-            ctx.drawImage(img, 0, 0, overlay.width, overlay.height);
-        };
-        img.src = URL.createObjectURL(blob);
+function hideSelectionHint() {
+    const hint = document.getElementById('selection-hint');
+    if (hint) {
+        hint.style.display = 'none';
     }
-    requestAnimationFrame(processFrame);
+}
+
+function clearCanvas() {
+    if (ctx) {
+        ctx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+}
+
+function requestCameraAgain() {
+    startStreaming();
 }
 </script>
 </body>

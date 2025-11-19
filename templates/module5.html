@@ -43,10 +43,17 @@
                     <div id="selection-hint" style="display:none;" class="alert alert-info">
                         <i class="fas fa-mouse-pointer"></i> Click and drag on the video to select the object you want to track
                     </div>
-                    <div class="mt-4 position-relative d-flex justify-content-center" style="width:100%;">
-                        <video id="video" width="640" height="480" autoplay muted class="border rounded"></video>
-                        <canvas id="overlay" width="640" height="480" style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
-                        <canvas id="selection" width="640" height="480" style="position:absolute;top:0;left:0;cursor:crosshair;display:none;"></canvas>
+                    
+                    <div id="selection-hint" style="display:none;" class="alert alert-info mb-3">
+                        <i class="fas fa-mouse-pointer"></i> Click and drag on the video to select the object you want to track
+                    </div>
+                    
+                    <div class="mt-4 d-flex justify-content-center" style="width:100%;">
+                        <div class="position-relative">
+                            <video id="video" width="640" height="480" autoplay muted class="border rounded"></video>
+                            <canvas id="overlay" width="640" height="480" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:0.375rem;"></canvas>
+                            <canvas id="selection" width="640" height="480" style="position:absolute;top:0;left:0;cursor:crosshair;display:none;z-index:10;border-radius:0.375rem;"></canvas>
+                        </div>
                     </div>
                     <div class="mt-3">
                         <span id="status" class="text-success"></span>
@@ -59,16 +66,22 @@
 {% endblock %}
 {% block scripts %}
 <script>
+console.log('JavaScript started successfully');
+
+// Global variables
+let selectedMode = 'markerless'; // Default mode
+
 const video = document.getElementById('video');
 const overlay = document.getElementById('overlay');
 const selection = document.getElementById('selection');
 const selectionHint = document.getElementById('selection-hint');
-const ctx = overlay.getContext('2d');
-const selectionCtx = selection.getContext('2d');
+const ctx = overlay ? overlay.getContext('2d') : null;
+const selectionCtx = selection ? selection.getContext('2d') : null;
 const modeSelect = document.getElementById('mode');
 const initBtn = document.getElementById('initBtn');
 const stopBtn = document.getElementById('stopBtn');
 const sam2UploadDiv = document.getElementById('sam2-upload');
+// SAM2 file upload elements (may not exist in this template)
 const sam2File = document.getElementById('sam2file');
 const uploadBtn = document.getElementById('uploadBtn');
 const statusSpan = document.getElementById('status');
@@ -85,11 +98,11 @@ modeSelect.addEventListener('change', () => {
     trackerMode = modeSelect.value;
     sam2UploadDiv.style.display = trackerMode === 'sam2' ? 'block' : 'none';
     
-    // Show selection canvas and hint for markerless mode
-    if (trackerMode === 'markerless') {
+    // Show selection canvas and hint for markerless and SAM2 modes
+    if (trackerMode === 'markerless' || trackerMode === 'sam2') {
         selection.style.display = 'block';
         selectionHint.style.display = 'block';
-        statusSpan.textContent = '🖱️ Select markerless mode - click and drag to select object';
+        statusSpan.textContent = '🖱️ ' + trackerMode + ' mode - click and drag to select object';
     } else {
         selection.style.display = 'none';
         selectionHint.style.display = 'none';
@@ -98,24 +111,96 @@ modeSelect.addEventListener('change', () => {
     }
 });
 
-// Handle mask option toggle
+// Mouse selection event handlers
+selection.addEventListener('mousedown', (e) => {
+    console.log('Mouse down - trackerMode:', trackerMode, 'tracking:', tracking);
+    
+    if ((trackerMode !== 'markerless' && trackerMode !== 'sam2') || tracking) return;
+    
+    isSelecting = true;
+    const rect = selection.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    
+    // Clear previous selection
+    clearSelection();
+});
+
+selection.addEventListener('mousemove', (e) => {
+    if (!isSelecting || ((trackerMode !== 'markerless' && trackerMode !== 'sam2')) || tracking) return;
+    
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    
+    console.log('Drawing rectangle:', startX, startY, endX - startX, endY - startY);
+    
+    // Clear and redraw selection rectangle
+    selectionCtx.clearRect(0, 0, selection.width, selection.height);
+    selectionCtx.strokeStyle = '#00ff00';
+    selectionCtx.lineWidth = 2;
+    selectionCtx.strokeRect(startX, startY, endX - startX, endY - startY);
+});
+
+selection.addEventListener('mouseup', (e) => {
+    if (!isSelecting || ((trackerMode !== 'markerless' && trackerMode !== 'sam2')) || tracking) return;
+    
+    isSelecting = false;
+    const rect = selection.getBoundingClientRect();
+    endX = e.clientX - rect.left;
+    endY = e.clientY - rect.top;
+    
+    // Calculate bounding box (ensure positive width/height)
+    const x = Math.min(startX, endX);
+    const y = Math.min(startY, endY);
+    const width = Math.abs(endX - startX);
+    const height = Math.abs(endY - startY);
+    
+    if (width > 10 && height > 10) { // Minimum size threshold
+        userBoundingBox = [x, y, width, height];
+        console.log('Selection made:', userBoundingBox);
+        statusSpan.textContent = `✅ Object selected (${width}×${height}) - ready to track`;
+        
+        // Draw final selection rectangle
+        clearSelection();
+        selectionCtx.strokeStyle = '#00ff00';
+        selectionCtx.lineWidth = 2;
+        selectionCtx.strokeRect(x, y, width, height);
+    } else {
+        console.log('Selection too small, ignored');
+        clearSelection();
+    }
+});
+
+// Mouse selection helper functions
+function clearSelection() {
+    if (selectionCtx) {
+        selectionCtx.clearRect(0, 0, selection.width, selection.height);
+    }
+}
+
+// Handle mask option toggle (with safety checks)
 const dummyMaskRadio = document.getElementById('dummyMask');
 const uploadMaskRadio = document.getElementById('uploadMask');
 const uploadSection = document.getElementById('upload-section');
 
-dummyMaskRadio.addEventListener('change', () => {
-    if (dummyMaskRadio.checked) {
-        uploadSection.style.display = 'none';
-        statusSpan.textContent = '🎯 Dummy mask selected (circular center mask)';
-    }
-});
+if (dummyMaskRadio) {
+    dummyMaskRadio.addEventListener('change', () => {
+        if (dummyMaskRadio.checked) {
+            if (uploadSection) uploadSection.style.display = 'none';
+            statusSpan.textContent = '🎯 Dummy mask selected (circular center mask)';
+        }
+    });
+}
 
-uploadMaskRadio.addEventListener('change', () => {
-    if (uploadMaskRadio.checked) {
-        uploadSection.style.display = 'block';
-        statusSpan.textContent = '📁 Upload your own SAM2 NPZ mask file';
-    }
-});
+if (uploadMaskRadio) {
+    uploadMaskRadio.addEventListener('change', () => {
+        if (uploadMaskRadio.checked) {
+            if (uploadSection) uploadSection.style.display = 'block';
+            statusSpan.textContent = '📁 Upload your own SAM2 NPZ mask file';
+        }
+    });
+}
 
 // Mouse selection functions for markerless tracking
 function clearSelection() {
@@ -407,6 +492,119 @@ async function processFrame() {
     
     // Continue the frame processing loop
     requestAnimationFrame(processFrame);
+}
+
+// Mode selection function
+function selectMode(mode) {
+    console.log('selectMode called with:', mode);
+    selectedMode = mode;
+    
+    // Visual feedback
+    document.getElementById('markerless-btn').classList.remove('active');
+    document.getElementById('sam2-btn').classList.remove('active');
+    document.getElementById(mode + '-btn').classList.add('active');
+    
+    // Show appropriate canvas based on mode
+    if (mode === 'markerless' || mode === 'sam2') {
+        if (selection) {
+            selection.style.display = 'block';
+            selection.style.cursor = 'crosshair';
+            selection.style.zIndex = '10';
+            selection.style.pointerEvents = 'auto';
+        }
+        if (selectionHint) selectionHint.style.display = 'block';
+        console.log('Selection canvas enabled for mode:', mode);
+    } else {
+        if (selection) selection.style.display = 'none';
+        if (selectionHint) selectionHint.style.display = 'none';
+        console.log('Selection canvas disabled for mode:', mode);
+    }
+    
+    console.log(`Mode selected: ${mode}`);
+}
+
+// Mouse event handlers for selection canvas
+if (selection) {
+    console.log('Adding mouse event listeners to selection canvas');
+    
+    selection.addEventListener('mousedown', function(e) {
+        console.log('Mouse down event triggered on selection canvas');
+        console.log('Current selectedMode:', selectedMode);
+        if (selectedMode !== 'markerless' && selectedMode !== 'sam2') {
+            console.log('Wrong mode, ignoring mouse down');
+            return;
+        }
+        
+        e.preventDefault();
+        isSelecting = true;
+        const rect = selection.getBoundingClientRect();
+        startX = e.clientX - rect.left;
+        startY = e.clientY - rect.top;
+        console.log('Selection started at:', startX, startY);
+        console.log('Canvas rect:', rect);
+    });
+
+    selection.addEventListener('mousemove', function(e) {
+        if (!isSelecting) return;
+        
+        const rect = selection.getBoundingClientRect();
+        endX = e.clientX - rect.left;
+        endY = e.clientY - rect.top;
+        
+        // Clear and redraw selection rectangle
+        if (selectionCtx) {
+            selectionCtx.clearRect(0, 0, selection.width, selection.height);
+            selectionCtx.strokeStyle = '#00ff00';
+            selectionCtx.lineWidth = 2;
+            selectionCtx.strokeRect(startX, startY, endX - startX, endY - startY);
+        }
+        
+        console.log('Drawing selection rectangle:', {startX, startY, endX, endY});
+    });
+
+    selection.addEventListener('mouseup', function(e) {
+        console.log('Mouse up event triggered');
+        if (!isSelecting) return;
+        
+        e.preventDefault();
+        isSelecting = false;
+        const rect = selection.getBoundingClientRect();
+        endX = e.clientX - rect.left;
+        endY = e.clientY - rect.top;
+        
+        // Calculate bounding box in video coordinates
+        const scaleX = video.videoWidth / video.offsetWidth;
+        const scaleY = video.videoHeight / video.offsetHeight;
+        
+        userBoundingBox = [
+            Math.min(startX, endX) * scaleX,
+            Math.min(startY, endY) * scaleY,
+            Math.abs(endX - startX) * scaleX,
+            Math.abs(endY - startY) * scaleY
+        ];
+        
+        console.log('Selection completed. Bounding box:', userBoundingBox);
+        
+        // Clear selection canvas after a brief delay
+        setTimeout(() => {
+            if (selectionCtx) {
+                selectionCtx.clearRect(0, 0, selection.width, selection.height);
+            }
+        }, 1000);
+    });
+
+    // Add a simple test event listener
+    selection.addEventListener('click', function(e) {
+        console.log('Canvas click detected!', e.clientX, e.clientY);
+    });
+}
+
+function clearSelection() {
+    if (selectionCtx) {
+        selectionCtx.clearRect(0, 0, selection.width, selection.height);
+    }
+    userBoundingBox = null;
+    console.log('Selection cleared');
 }
 </script>
 {% endblock %}
