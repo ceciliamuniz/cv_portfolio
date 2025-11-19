@@ -354,6 +354,87 @@ def module4_direct():
     """Module 4: Image Stitching - Direct route using main template"""
     return render_template('module4.html')
 
+@app.route('/api/stitch', methods=['POST'])
+def api_stitch():
+    """Module 4 API: Image stitching endpoint"""
+    try:
+        # Import Module 4 functionality
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'))
+        from app import ImageStitching
+        import cv2 as cv
+        import time
+        
+        stitcher = ImageStitching()
+        start_time = time.time()
+        
+        files = request.files.getlist('images')
+        
+        if len(files) < 2:
+            return jsonify({'error': 'Upload at least 2 images'}), 400
+        
+        # Read images
+        imgs = []
+        for file in files:
+            # Convert file to numpy array
+            file_bytes = np.frombuffer(file.read(), np.uint8)
+            img = cv.imdecode(file_bytes, cv.IMREAD_COLOR)
+            if img is None:
+                return jsonify({'error': f'Invalid image file: {file.filename}'}), 400
+            imgs.append(img)
+        
+        # Resize images if too large
+        max_dimension = 1200
+        resized_imgs = []
+        for img in imgs:
+            h, w = img.shape[:2]
+            if max(h, w) > max_dimension:
+                scale = max_dimension / max(h, w)
+                new_w, new_h = int(w * scale), int(h * scale)
+                resized_img = cv.resize(img, (new_w, new_h))
+                resized_imgs.append(resized_img)
+            else:
+                resized_imgs.append(img)
+        imgs = resized_imgs
+        
+        # Stitch images
+        if len(imgs) == 2:
+            result = stitcher.blending(imgs[0], imgs[1])
+        else:
+            result = imgs[0]
+            for i in range(1, len(imgs)):
+                temp_result = stitcher.blending(result, imgs[i])
+                if temp_result is not None:
+                    result = temp_result
+                else:
+                    break
+        
+        if result is None:
+            return jsonify({'error': 'Stitching failed - insufficient feature matches'}), 500
+        
+        # Convert result to base64
+        _, buffer = cv.imencode('.jpg', result, [cv.IMWRITE_JPEG_QUALITY, 95])
+        result_base64 = base64.b64encode(buffer).decode('utf-8')
+        
+        processing_time = time.time() - start_time
+        
+        return jsonify({
+            'success': True,
+            'panorama': f'data:image/jpeg;base64,{result_base64}',
+            'statistics': {
+                'input_images': len(imgs),
+                'output_resolution': f'{result.shape[1]}x{result.shape[0]}',
+                'processing_time': f'{processing_time:.2f}s'
+            },
+            'processing_time': round(processing_time, 2),
+            'image_count': len(imgs),
+            'result_dimensions': result.shape[:2]
+        })
+        
+    except Exception as e:
+        print(f"Stitching error: {e}")
+        return jsonify({'error': f'Stitching failed: {str(e)}'}), 500
+
 @app.route('/api/template-matching', methods=['POST'])
 def api_template_matching():
     """API endpoint for template matching with optional blurring"""
