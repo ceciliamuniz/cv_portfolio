@@ -20,6 +20,7 @@ try:
     
     import sift_scratch
     CUSTOM_SIFT_AVAILABLE = True
+    print("[INFO] Custom SIFT implementation loaded successfully")
 
 except ImportError as e:
     print(f"[WARN] Custom SIFT not available: {e}")
@@ -49,24 +50,67 @@ class ImageStitching:
         
         if self.use_custom_sift:
             try:
-
+                # Convert images to grayscale for SIFT processing
+                gray1 = cv.cvtColor(img1, cv.COLOR_BGR2GRAY) if len(img1.shape) == 3 else img1
+                gray2 = cv.cvtColor(img2, cv.COLOR_BGR2GRAY) if len(img2.shape) == 3 else img2
                 
-                # Use the comparison function from sift_scratch.py
-                comparison_results = sift_scratch.compare_with_opencv_sift(img1, img2, visualize=False)
+                # Use custom SIFT implementation to find matches
+                print("[INFO] Running custom SIFT implementation...")
                 
-                # Extract homography from custom implementation if available
-                if 'custom' in comparison_results and 'homography' in comparison_results['custom']:
-                    H_custom = comparison_results['custom']['homography']
-                    if H_custom is not None:
-                        print("[SUCCESS] Custom SIFT implementation found valid homography")
-                        print(f"[COMPARISON] Custom: {comparison_results['custom'].get('keypoints', 0)} keypoints")
-                        print(f"[COMPARISON] OpenCV: {comparison_results['opencv'].get('keypoints', 0)} keypoints")
-                        return H_custom
+                # Build pyramids and compute features
+                pyramid1 = sift_scratch.build_gaussian_pyramid(gray1)
+                pyramid2 = sift_scratch.build_gaussian_pyramid(gray2)
                 
-                print("[FALLBACK] Custom SIFT didn't find sufficient matches, using OpenCV")
+                dog1 = sift_scratch.compute_dog(pyramid1)
+                dog2 = sift_scratch.compute_dog(pyramid2)
+                
+                # Detect keypoints
+                kps1 = sift_scratch.detect_keypoints(dog1)
+                kps2 = sift_scratch.detect_keypoints(dog2)
+                
+                if len(kps1) < 4 or len(kps2) < 4:
+                    print(f"[WARN] Insufficient keypoints: {len(kps1)}, {len(kps2)}")
+                    raise Exception("Insufficient keypoints for custom SIFT")
+                
+                # Assign orientations
+                kps1_oriented = sift_scratch.assign_orientations(kps1, pyramid1)
+                kps2_oriented = sift_scratch.assign_orientations(kps2, pyramid2)
+                
+                # Compute descriptors
+                desc1_custom = sift_scratch.compute_descriptors(kps1_oriented, pyramid1)
+                desc2_custom = sift_scratch.compute_descriptors(kps2_oriented, pyramid2)
+                
+                if len(desc1_custom) < 4 or len(desc2_custom) < 4:
+                    print(f"[WARN] Insufficient descriptors: {len(desc1_custom)}, {len(desc2_custom)}")
+                    raise Exception("Insufficient descriptors for custom SIFT")
+                
+                # Match descriptors
+                matches_custom = sift_scratch.match_descriptors(desc1_custom, desc2_custom)
+                
+                if len(matches_custom) >= self.min_match:
+                    # Extract point correspondences
+                    src_points = []
+                    dst_points = []
+                    
+                    for match_idx, (i1, i2, dist) in enumerate(matches_custom):
+                        if i1 < len(desc1_custom) and i2 < len(desc2_custom):
+                            src_points.append(desc2_custom[i2]['pt'])  # Second image points
+                            dst_points.append(desc1_custom[i1]['pt'])  # First image points
+                    
+                    if len(src_points) >= 4:
+                        # Use enhanced RANSAC for homography estimation
+                        H_custom, inliers = sift_scratch.enhanced_ransac_homography(
+                            matches_custom, src_points, dst_points)
+                        
+                        if H_custom is not None:
+                            print(f"[SUCCESS] Custom SIFT found homography with {len(inliers)} inliers from {len(matches_custom)} matches")
+                            print(f"[STATS] Keypoints: {len(desc1_custom)} + {len(desc2_custom)}, Matches: {len(matches_custom)}")
+                            return H_custom
+                
+                print(f"[FALLBACK] Custom SIFT insufficient matches: {len(matches_custom)}")
                 
             except Exception as e:
-                print(f"[ERROR] Custom SIFT comparison failed: {e}")
+                print(f"[ERROR] Custom SIFT failed: {e}")
                 print("[FALLBACK] Using OpenCV SIFT implementation")
         
         # Fallback to OpenCV SIFT
@@ -229,10 +273,10 @@ def validate_images(images, min_images=4):
 @module4_bp.route('')  # This handles /module4 without trailing slash
 def index():
     try:
-        # Use a more specific template path to avoid conflicts
-        template_path = Path(__file__).parent / 'templates' / 'index.html'
+        # Use a more specific template name to avoid conflicts with main app index.html
+        template_path = Path(__file__).parent / 'templates' / 'module4_index.html'
         if template_path.exists():
-            return render_template('index.html')
+            return render_template('module4_index.html')
         else:
             return f"<h1>Module 4: Image Stitching</h1><p>Template not found at: {template_path}</p>"
     except Exception as e:
@@ -241,18 +285,18 @@ def index():
 
 
 
-@module4_bp.route('/api/stitch', methods=['POST'])
-def api_stitch():
+@module4_bp.route('/api/stitch-custom', methods=['POST'])  
+def api_stitch_custom():
+    """Assignment 2: Custom SIFT from scratch with RANSAC optimization"""
     start_time = time.time()
     
     try:
         files = request.files.getlist('images')
-        
         if len(files) < 2:
             return jsonify({'error': 'Upload at least 2 images'}), 400
 
         imgs = [read_image_file(f) for f in files]
-        
+
         # Resize images if too large to prevent memory issues
         max_dimension = 1200  # Reduced for better performance
         resized_imgs = []
@@ -266,10 +310,8 @@ def api_stitch():
             else:
                 resized_imgs.append(img)
         imgs = resized_imgs
-        
-        # Use our SIFT-based stitching implementation
 
-        
+        # Use our SIFT-based stitching implementation
         # For multiple images, stitch sequentially
         if len(imgs) == 2:
             result = stitcher.blending(imgs[0], imgs[1])
@@ -277,22 +319,18 @@ def api_stitch():
             # Sequential stitching for multiple images
             result = imgs[0]
             for i in range(1, len(imgs)):
-
                 temp_result = stitcher.blending(result, imgs[i])
                 if temp_result is not None:
                     result = temp_result
                 else:
                     print(f"[WARN] Failed to stitch image {i}, using previous result")
                     break
-        
+
         if result is None:
             return jsonify({'error': 'Stitching failed - insufficient feature matches or invalid homography'}), 500
-        
 
-        
         # Create quality metrics highlighting assignment requirements
         sift_implementation = "Custom SIFT from scratch" if stitcher.use_custom_sift else "OpenCV SIFT (fallback)"
-        
         quality_metrics = {
             'resolution': f"{result.shape[1]}x{result.shape[0]}",
             'total_pixels': int(result.shape[0] * result.shape[1]),
@@ -306,8 +344,16 @@ def api_stitch():
             }
         }
         
+        # Add comparison results if available
+        comparison_data = None
+        if stitcher.use_custom_sift:
+            try:
+                # Run comparison for demonstration
+                comparison_data = sift_scratch.compare_with_opencv_sift(imgs[0], imgs[1] if len(imgs) > 1 else imgs[0], visualize=False)
+            except Exception as e:
+                print(f"[WARN] Comparison failed: {e}")
+
         result_b64 = img_to_base64(result, quality=85)
-        
         response_data = {
             'success': True, 
             'panorama': f'data:image/jpeg;base64,{result_b64}',
@@ -320,11 +366,12 @@ def api_stitch():
             }
         }
         
+        # Include comparison data if available
+        if comparison_data:
+            response_data['comparison'] = comparison_data
         # Convert NumPy types to JSON-serializable types
         response_data = convert_numpy_types(response_data)
-        
         return jsonify(response_data)
-        
     except Exception as e:
         print(f"[ERROR] Stitching failed: {e}")
         import traceback

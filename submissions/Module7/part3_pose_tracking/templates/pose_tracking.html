@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module 7 Part 3: Real-time Pose Estimation & Hand Tracking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .video-container {
+            position: relative;
+            max-width: 100%;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .video-feed {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .recording-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: none;
+        }
+        
+        .recording-indicator.active {
+            display: block;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        
+        .control-panel {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-success { background: #d4edda; color: #155724; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .status-danger { background: #f8d7da; color: #721c24; }
+        
+        .landmark-info {
+            max-height: 400px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .data-preview {
+            font-family: monospace;
+            font-size: 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .mode-selector {
+            margin-bottom: 15px;
+        }
+        
+        .export-section {
+            background: #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-eye"></i> CV Portfolio
+            </a>
+            <span class="navbar-text">
+                <i class="fas fa-running"></i> Module 7 Part 3: Pose & Hand Tracking
+            </span>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <!-- Main Video Feed -->
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-video"></i> Real-time Pose & Hand Tracking
+                        </h4>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="video-container">
+                            <img id="videoFeed" class="video-feed" src="/module7/pose/api/video_feed" alt="Video Feed">
+                            <div id="recordingIndicator" class="recording-indicator">
+                                <i class="fas fa-circle"></i> RECORDING
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Upload Section -->
+                <div class="card mt-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-upload"></i> Static Image Processing
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mode-selector">
+                            <label class="form-label">Processing Mode:</label>
+                            <select id="processingMode" class="form-select">
+                                <option value="holistic">Holistic (Pose + Hands + Face)</option>
+                                <option value="pose_only">Pose Only</option>
+                                <option value="hands_only">Hands Only</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="imageUpload" class="form-label">Upload Image for Analysis</label>
+                            <input type="file" class="form-control" id="imageUpload" accept="image/*">
+                        </div>
+                        
+                        <button id="processImageBtn" class="btn btn-success" disabled>
+                            <i class="fas fa-cog"></i> Process Image
+                        </button>
+                        
+                        <div id="imageResult" class="mt-3" style="display: none;">
+                            <h6>Processed Result:</h6>
+                            <img id="processedImage" class="img-fluid" style="max-height: 400px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="col-lg-4">
+                <!-- Recording Controls -->
+                <div class="control-panel">
+                    <h5><i class="fas fa-record-vinyl"></i> Recording Controls</h5>
+                    
+                    <div class="d-grid gap-2 mb-3">
+                        <button id="startRecordingBtn" class="btn btn-danger">
+                            <i class="fas fa-play"></i> Start Recording
+                        </button>
+                        <button id="stopRecordingBtn" class="btn btn-secondary" disabled>
+                            <i class="fas fa-stop"></i> Stop Recording
+                        </button>
+                    </div>
+                    
+                    <div id="recordingStatus" class="mb-3">
+                        <span class="status-badge status-warning">Ready to Record</span>
+                    </div>
+                    
+                    <div class="export-section">
+                        <h6><i class="fas fa-download"></i> Data Export</h6>
+                        <button id="exportCsvBtn" class="btn btn-outline-primary btn-sm" disabled>
+                            <i class="fas fa-file-csv"></i> Export to CSV
+                        </button>
+                        <div id="exportStatus" class="mt-2"></div>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0"><i class="fas fa-heartbeat"></i> System Status</h6>
+                    </div>
+                    <div class="card-body">
+                        <button id="testSystemBtn" class="btn btn-outline-info btn-sm mb-3">
+                            <i class="fas fa-check-circle"></i> Test MediaPipe
+                        </button>
+                        <div id="systemStatus">
+                            <div class="text-muted">Click test to check system status</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Data Preview -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-chart-line"></i> Live Data Preview
+                            <button id="toggleDataPreview" class="btn btn-sm btn-outline-secondary float-end">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="dataPreviewBody" class="card-body" style="display: none;">
+                        <div id="liveDataPreview" class="data-preview">
+                            No data available
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Landmark Information -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-info-circle"></i> Landmark Guide
+                            <button id="toggleLandmarkInfo" class="btn btn-sm btn-outline-secondary float-end">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </h6>
+                    </div>
+                    <div id="landmarkInfoBody" class="card-body" style="display: none;">
+                        <div id="landmarkInfo" class="landmark-info">
+                            <div class="text-muted">Loading landmark information...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Application state
+        let isRecording = false;
+        let recordedFrames = 0;
+        let lastProcessedData = null;
+        
+        // DOM elements
+        const videoFeed = document.getElementById('videoFeed');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const startRecordingBtn = document.getElementById('startRecordingBtn');
+        const stopRecordingBtn = document.getElementById('stopRecordingBtn');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+        const recordingStatus = document.getElementById('recordingStatus');
+        const exportStatus = document.getElementById('exportStatus');
+        const systemStatus = document.getElementById('systemStatus');
+        const liveDataPreview = document.getElementById('liveDataPreview');
+        const landmarkInfo = document.getElementById('landmarkInfo');
+        const imageUpload = document.getElementById('imageUpload');
+        const processImageBtn = document.getElementById('processImageBtn');
+        const imageResult = document.getElementById('imageResult');
+        const processedImage = document.getElementById('processedImage');
+        
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', function() {
+            loadLandmarkInfo();
+            testSystem();
+            
+            // Set up event listeners
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            // Recording controls
+            startRecordingBtn.addEventListener('click', startRecording);
+            stopRecordingBtn.addEventListener('click', stopRecording);
+            exportCsvBtn.addEventListener('click', exportCsv);
+            
+            // System testing
+            document.getElementById('testSystemBtn').addEventListener('click', testSystem);
+            
+            // Image processing
+            imageUpload.addEventListener('change', function() {
+                processImageBtn.disabled = !this.files.length;
+            });
+            processImageBtn.addEventListener('click', processImage);
+            
+            // UI toggles
+            document.getElementById('toggleDataPreview').addEventListener('click', function() {
+                const body = document.getElementById('dataPreviewBody');
+                body.style.display = body.style.display === 'none' ? 'block' : 'none';
+            });
+            
+            document.getElementById('toggleLandmarkInfo').addEventListener('click', function() {
+                const body = document.getElementById('landmarkInfoBody');
+                body.style.display = body.style.display === 'none' ? 'block' : 'none';
+            });
+        }
+        
+        async function startRecording() {
+            try {
+                const response = await fetch('/module7/pose/api/start_recording', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    isRecording = true;
+                    recordedFrames = 0;
+                    
+                    // Update UI
+                    startRecordingBtn.disabled = true;
+                    stopRecordingBtn.disabled = false;
+                    recordingIndicator.classList.add('active');
+                    recordingStatus.innerHTML = '<span class="status-badge status-danger">Recording Active</span>';
+                    
+                    // Start frame counter
+                    updateRecordingCounter();
+                } else {
+                    throw new Error(result.message || 'Failed to start recording');
+                }
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                alert('Failed to start recording: ' + error.message);
+            }
+        }
+        
+        async function stopRecording() {
+            try {
+                const response = await fetch('/module7/pose/api/stop_recording', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    isRecording = false;
+                    
+                    // Update UI
+                    startRecordingBtn.disabled = false;
+                    stopRecordingBtn.disabled = true;
+                    exportCsvBtn.disabled = false;
+                    recordingIndicator.classList.remove('active');
+                    
+                    recordingStatus.innerHTML = `
+                        <span class="status-badge status-success">
+                            Recording Complete: ${result.frames_recorded} frames
+                        </span>
+                    `;
+                } else {
+                    throw new Error(result.message || 'Failed to stop recording');
+                }
+            } catch (error) {
+                console.error('Error stopping recording:', error);
+                alert('Failed to stop recording: ' + error.message);
+            }
+        }
+        
+        function updateRecordingCounter() {
+            if (isRecording) {
+                recordedFrames++;
+                recordingStatus.innerHTML = `
+                    <span class="status-badge status-danger">
+                        Recording: ${recordedFrames} frames
+                    </span>
+                `;
+                setTimeout(updateRecordingCounter, 100);
+            }
+        }
+        
+        async function exportCsv() {
+            try {
+                exportStatus.innerHTML = '<div class="text-info"><i class="fas fa-spinner fa-spin"></i> Exporting...</div>';
+                
+                const response = await fetch('/module7/pose/api/export_csv', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    exportStatus.innerHTML = `
+                        <div class="text-success">
+                            <i class="fas fa-check"></i> Exported ${result.rows_exported} rows
+                            <br><small>Columns: ${result.columns.length}</small>
+                            <br><a href="${result.download_url}" class="btn btn-sm btn-primary mt-1" download>
+                                <i class="fas fa-download"></i> Download ${result.filename}
+                            </a>
+                        </div>
+                    `;
+                    
+                    // Reset recording state
+                    exportCsvBtn.disabled = true;
+                } else {
+                    throw new Error(result.error || 'Export failed');
+                }
+            } catch (error) {
+                console.error('Error exporting CSV:', error);
+                exportStatus.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-triangle"></i> Export failed: ${error.message}</div>`;
+            }
+        }
+        
+        async function processImage() {
+            try {
+                const file = imageUpload.files[0];
+                if (!file) return;
+                
+                const formData = new FormData();
+                formData.append('image', file);
+                formData.append('mode', document.getElementById('processingMode').value);
+                
+                processImageBtn.disabled = true;
+                processImageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                
+                const response = await fetch('/module7/pose/api/process_frame', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Display processed image
+                    processedImage.src = result.annotated_image;
+                    imageResult.style.display = 'block';
+                    
+                    // Update live data preview
+                    lastProcessedData = result.pose_data;
+                    updateDataPreview(result.pose_data);
+                    
+                    // Show detection status
+                    const landmarks = result.landmarks_detected;
+                    let statusHtml = '<strong>Detected:</strong> ';
+                    if (landmarks.pose) statusHtml += '<span class="badge bg-success">Pose</span> ';
+                    if (landmarks.left_hand) statusHtml += '<span class="badge bg-info">Left Hand</span> ';
+                    if (landmarks.right_hand) statusHtml += '<span class="badge bg-info">Right Hand</span> ';
+                    if (landmarks.face) statusHtml += '<span class="badge bg-warning">Face</span> ';
+                    
+                    exportStatus.innerHTML = statusHtml;
+                } else {
+                    throw new Error(result.error || 'Processing failed');
+                }
+            } catch (error) {
+                console.error('Error processing image:', error);
+                alert('Failed to process image: ' + error.message);
+            } finally {
+                processImageBtn.disabled = false;
+                processImageBtn.innerHTML = '<i class="fas fa-cog"></i> Process Image';
+            }
+        }
+        
+        async function testSystem() {
+            try {
+                systemStatus.innerHTML = '<div class="text-info"><i class="fas fa-spinner fa-spin"></i> Testing system...</div>';
+                
+                const response = await fetch('/module7/pose/api/test');
+                const result = await response.json();
+                
+                if (result.success) {
+                    let statusHtml = '<div class="text-success"><strong>' + result.status + '</strong></div><hr>';
+                    
+                    const tests = result.test_results;
+                    statusHtml += '<small>';
+                    statusHtml += `MediaPipe: <span class="badge ${tests.mediapipe_version ? 'bg-success' : 'bg-danger'}">${tests.mediapipe_version || 'Not Available'}</span><br>`;
+                    statusHtml += `OpenCV: <span class="badge ${tests.opencv_version ? 'bg-success' : 'bg-danger'}">${tests.opencv_version || 'Not Available'}</span><br>`;
+                    statusHtml += `Camera: <span class="badge ${tests.camera_available ? 'bg-success' : 'bg-danger'}">${tests.camera_available ? 'Available' : 'Not Available'}</span><br>`;
+                    statusHtml += `Pose: <span class="badge ${tests.pose_available ? 'bg-success' : 'bg-danger'}">${tests.pose_available ? 'Ready' : 'Not Available'}</span><br>`;
+                    statusHtml += `Hands: <span class="badge ${tests.hands_available ? 'bg-success' : 'bg-danger'}">${tests.hands_available ? 'Ready' : 'Not Available'}</span><br>`;
+                    statusHtml += `Holistic: <span class="badge ${tests.holistic_available ? 'bg-success' : 'bg-danger'}">${tests.holistic_available ? 'Ready' : 'Not Available'}</span>`;
+                    statusHtml += '</small>';
+                    
+                    systemStatus.innerHTML = statusHtml;
+                } else {
+                    throw new Error(result.error || 'System test failed');
+                }
+            } catch (error) {
+                console.error('Error testing system:', error);
+                systemStatus.innerHTML = `<div class="text-danger"><strong>System Test Failed</strong><br><small>${error.message}</small></div>`;
+            }
+        }
+        
+        async function loadLandmarkInfo() {
+            try {
+                const response = await fetch('/module7/pose/api/landmark_info');
+                const info = await response.json();
+                
+                let html = '';
+                
+                // Pose landmarks
+                html += '<h6><i class="fas fa-male"></i> Pose Landmarks</h6>';
+                html += `<p class="small text-muted">${info.pose_landmarks.description}</p>`;
+                html += '<div class="row">';
+                Object.entries(info.pose_landmarks.landmarks).forEach(([idx, name], i) => {
+                    if (i % 2 === 0 && i > 0) html += '</div><div class="row">';
+                    html += `<div class="col-6"><small>${idx}: ${name}</small></div>`;
+                });
+                html += '</div><hr>';
+                
+                // Hand landmarks
+                html += '<h6><i class="fas fa-hand-paper"></i> Hand Landmarks</h6>';
+                html += `<p class="small text-muted">${info.hand_landmarks.description}</p>`;
+                html += '<div class="row">';
+                Object.entries(info.hand_landmarks.landmarks).forEach(([idx, name], i) => {
+                    if (i % 2 === 0 && i > 0) html += '</div><div class="row">';
+                    html += `<div class="col-6"><small>${idx}: ${name}</small></div>`;
+                });
+                html += '</div><hr>';
+                
+                // Coordinate system
+                html += '<h6><i class="fas fa-compass"></i> Coordinate System</h6>';
+                Object.entries(info.coordinate_system).forEach(([axis, desc]) => {
+                    html += `<div class="small"><strong>${axis}:</strong> ${desc}</div>`;
+                });
+                
+                landmarkInfo.innerHTML = html;
+            } catch (error) {
+                console.error('Error loading landmark info:', error);
+                landmarkInfo.innerHTML = '<div class="text-danger">Failed to load landmark information</div>';
+            }
+        }
+        
+        function updateDataPreview(data) {
+            if (!data) {
+                liveDataPreview.textContent = 'No data available';
+                return;
+            }
+            
+            let preview = 'Latest Pose Data:\n';
+            preview += `Timestamp: ${data.timestamp}\n`;
+            preview += `Mode: ${data.mode}\n\n`;
+            
+            // Show first few pose landmarks as example
+            const poseKeys = Object.keys(data).filter(key => key.startsWith('pose_') && key.endsWith('_x'));
+            if (poseKeys.length > 0) {
+                preview += 'Pose Landmarks (sample):\n';
+                poseKeys.slice(0, 5).forEach(key => {
+                    const idx = key.split('_')[1];
+                    const x = data[`pose_${idx}_x`];
+                    const y = data[`pose_${idx}_y`];
+                    const z = data[`pose_${idx}_z`];
+                    preview += `  Point ${idx}: (${x?.toFixed(3)}, ${y?.toFixed(3)}, ${z?.toFixed(3)})\n`;
+                });
+            }
+            
+            // Show hand data if available
+            const leftHandKeys = Object.keys(data).filter(key => key.startsWith('left_hand_') && key.endsWith('_x'));
+            if (leftHandKeys.length > 0) {
+                preview += '\nLeft Hand Detected: ' + leftHandKeys.length + ' points\n';
+            }
+            
+            const rightHandKeys = Object.keys(data).filter(key => key.startsWith('right_hand_') && key.endsWith('_x'));
+            if (rightHandKeys.length > 0) {
+                preview += 'Right Hand Detected: ' + rightHandKeys.length + ' points\n';
+            }
+            
+            liveDataPreview.textContent = preview;
+        }
+        
+        // Error handling for video feed
+        videoFeed.addEventListener('error', function() {
+            console.error('Video feed error');
+            this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQwIiBoZWlnaHQ9IjQ4MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjNjY2Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIyMCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhbWVyYSBOb3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
+        });
+    </script>
+</body>
+</html>

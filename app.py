@@ -23,22 +23,20 @@ import os
 app = Flask(__name__)
 
 # --- Module 4 (Image Stitching) integration ---
-# Temporarily disabled blueprint to use direct route instead
-# import sys as _sys
-# from pathlib import Path
-# _module4_path = Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'
-# try:
-#     if _module4_path.exists():
-#         from submissions.Module4_ImageStitching.app import module4_bp
-#         app.register_blueprint(module4_bp, url_prefix='/module4')
-#         print("[INFO] Module 4 blueprint registered at /module4")
-#     else:
-#         print("[INFO] Module 4 not found at:", _module4_path)
-# except Exception as e:
-#     print("[WARN] Failed to register Module 4 blueprint:", e)
-print("[INFO] Module 4 using direct route instead of blueprint")
+import sys as _sys
+_module4_path = Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'
+try:
+    if _module4_path.exists():
+        _sys.path.insert(0, str(_module4_path))
+        from submissions.Module4_ImageStitching.app import module4_bp
+        app.register_blueprint(module4_bp, url_prefix='/module4')
+        print("[INFO] Module 4 blueprint registered at /module4")
+    else:
+        print("[INFO] Module 4 not found at:", _module4_path)
+except Exception as e:
+    print("[WARN] Failed to register Module 4 blueprint:", e)
 
-# --- Module 7 (Stereo Size Estimation) integration ---
+# --- Module 7 Part 1 (Stereo Size Estimation) integration ---
 _module7_part1_path = Path(__file__).parent / 'submissions' / 'Module7' / 'part1_stereosize'
 try:
     if _module7_part1_path.exists():
@@ -48,7 +46,22 @@ try:
     else:
         print("[INFO] Module 7 Part 1 not found at:", _module7_part1_path)
 except Exception as e:
-    print("[WARN] Failed to register Module 7 Part 1 blueprint:", e)
+    print(f"[WARN] Failed to register Module 7 Part 1 blueprint: {e}")
+
+# --- Module 7 Part 3 (Pose Estimation & Hand Tracking) integration ---
+_module7_part3_path = Path(__file__).parent / 'submissions' / 'Module7' / 'part3_pose_tracking'
+try:
+    if _module7_part3_path.exists():
+        from submissions.Module7.part3_pose_tracking.app import pose_bp
+        app.register_blueprint(pose_bp, url_prefix='/module7/pose')
+        print("[INFO] Module 7 Part 3 blueprint registered at /module7/pose")
+    else:
+        print("[INFO] Module 7 Part 3 not found at:", _module7_part3_path)
+except Exception as e:
+    print(f"[WARN] Failed to register Module 7 Part 3 blueprint: {e}")
+    print(f"[DEBUG] Error details: {str(e)}")
+    import traceback
+    traceback.print_exc()
 
 # Configure upload folder
 UPLOAD_FOLDER = 'static/uploads'
@@ -65,10 +78,23 @@ try:
         _sys.path.insert(0, str(_module3_path))
         try:
             from routes import module3_bp  # type: ignore
+            print(f"[DEBUG] Imported module3_bp: {module3_bp}")
+            print(f"[DEBUG] Blueprint URL prefix: {module3_bp.url_prefix}")
+            print(f"[DEBUG] Blueprint deferred functions: {len(module3_bp.deferred_functions)}")
+            
             app.register_blueprint(module3_bp)
-            print("[INFO] Module 3 blueprint registered at /module3")
-        except (ImportError, KeyboardInterrupt) as e:
-            print(f"[WARN] Module 3 blueprint failed to load (missing dependencies): {type(e).__name__}")
+            print(f"[INFO] Module 3 blueprint registered successfully")
+            
+            # Check what routes are actually in the app after registration
+            module3_routes = [rule for rule in app.url_map.iter_rules() if 'module3' in rule.rule]
+            print(f"[DEBUG] Module3 routes found in app: {len(module3_routes)}")
+            for route in module3_routes:
+                print(f"[DEBUG] App route: {route.rule} -> {route.endpoint}")
+                
+        except Exception as e:
+            print(f"[ERROR] Module 3 blueprint registration failed: {e}")
+            import traceback
+            traceback.print_exc()
             # Continue without Module 3 if dependencies are missing
     else:
         print("[INFO] Module 3 web integration not found at:", _module3_path)
@@ -348,24 +374,30 @@ def module2_part2():
     """Module 2 Part 2: Gaussian Blur and Fourier Transform Recovery"""
     return render_template('part2_blur_recovery.html')
 
-@app.route('/module4/')
-@app.route('/module4')
-def module4_direct():
-    """Module 4: Image Stitching - Direct route using main template"""
-    return render_template('module4.html')
+# Module 4 routes are handled by the blueprint - removed conflicting direct routes
 
-@app.route('/api/stitch', methods=['POST'])
-def api_stitch():
-    """Module 4 API: Image stitching endpoint"""
+@app.route('/debug-routes')
+def debug_routes():
+    """Debug: List all registered routes"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'url': str(rule)
+        })
+    return jsonify({'routes': routes, 'total': len(routes)})
+
+@app.route('/test-simple')
+def test_simple():
+    """Simple test route"""
+    return jsonify({'message': 'Test route works', 'stitch_simple_exists': '/api/stitch-simple' in [str(rule) for rule in app.url_map.iter_rules()]})
+
+@app.route('/api/stitch-simple', methods=['POST'])
+def api_stitch_simple():
+    """Assignment 1: Simple image stitching using OpenCV's built-in Stitcher"""
     try:
-        # Import Module 4 functionality
-        import sys
-        sys.path.insert(0, str(Path(__file__).parent / 'submissions' / 'Module4_ImageStitching'))
-        from app import ImageStitching
-        import cv2 as cv
         import time
-        
-        stitcher = ImageStitching()
         start_time = time.time()
         
         files = request.files.getlist('images')
@@ -383,7 +415,7 @@ def api_stitch():
                 return jsonify({'error': f'Invalid image file: {file.filename}'}), 400
             imgs.append(img)
         
-        # Resize images if too large
+        # Resize images if too large for better performance
         max_dimension = 1200
         resized_imgs = []
         for img in imgs:
@@ -397,39 +429,77 @@ def api_stitch():
                 resized_imgs.append(img)
         imgs = resized_imgs
         
-        # Stitch images
-        if len(imgs) == 2:
-            result = stitcher.blending(imgs[0], imgs[1])
+        # Use OpenCV's built-in Stitcher (from cv_stitching.py implementation)
+        print(f"[INFO] Stitching {len(imgs)} images using OpenCV Stitcher...")
+        
+        # Create stitcher
+        stitcher = cv.Stitcher_create()
+        status, result = stitcher.stitch(imgs)
+        
+        if status == cv.Stitcher_OK:
+            print("[INFO] OpenCV Stitcher succeeded.")
+            
+            # Post-processing: Crop black borders (simplified version for web)
+            # Add small border for processing
+            result = cv.copyMakeBorder(result, 10, 10, 10, 10, cv.BORDER_CONSTANT, (0,0,0))
+            
+            # Convert to grayscale and create threshold
+            gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY)
+            thresh_img = cv.threshold(gray, 1, 255, cv.THRESH_BINARY)[1]
+            
+            # Find contours and get bounding rectangle
+            contours, _ = cv.findContours(thresh_img.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            if contours:
+                c = max(contours, key=cv.contourArea)
+                mask = np.zeros(thresh_img.shape, dtype="uint8")
+                (x, y, w, h) = cv.boundingRect(c)
+                cv.rectangle(mask, (x, y), (x + w, y + h), 255, -1)
+                
+                # Erode to find minimal rectangle
+                minRect = mask.copy()
+                sub = mask.copy()
+                iterations = 0
+                while cv.countNonZero(sub) > 0 and iterations < 50:  # Prevent infinite loop
+                    minRect = cv.erode(minRect, None)
+                    sub = cv.subtract(minRect, thresh_img)
+                    iterations += 1
+                
+                # Find final contour and crop
+                contours, _ = cv.findContours(minRect.copy(), cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+                if contours:
+                    c = max(contours, key=cv.contourArea)
+                    (x, y, w, h) = cv.boundingRect(c)
+                    result = result[y:y + h, x:x + w]
+            
+            processing_time = time.time() - start_time
+            
+            # Convert result to base64
+            _, buffer = cv.imencode('.jpg', result, [cv.IMWRITE_JPEG_QUALITY, 95])
+            result_base64 = base64.b64encode(buffer).decode('utf-8')
+            
+            return jsonify({
+                'success': True,
+                'panorama': f'data:image/jpeg;base64,{result_base64}',
+                'statistics': {
+                    'input_images': len(imgs),
+                    'output_resolution': f'{result.shape[1]}x{result.shape[0]}',
+                    'processing_time': f'{processing_time:.2f}s',
+                    'method': 'OpenCV Stitcher'
+                },
+                'processing_time': round(processing_time, 2),
+                'image_count': len(imgs),
+                'result_dimensions': result.shape[:2]
+            })
         else:
-            result = imgs[0]
-            for i in range(1, len(imgs)):
-                temp_result = stitcher.blending(result, imgs[i])
-                if temp_result is not None:
-                    result = temp_result
-                else:
-                    break
-        
-        if result is None:
-            return jsonify({'error': 'Stitching failed - insufficient feature matches'}), 500
-        
-        # Convert result to base64
-        _, buffer = cv.imencode('.jpg', result, [cv.IMWRITE_JPEG_QUALITY, 95])
-        result_base64 = base64.b64encode(buffer).decode('utf-8')
-        
-        processing_time = time.time() - start_time
-        
-        return jsonify({
-            'success': True,
-            'panorama': f'data:image/jpeg;base64,{result_base64}',
-            'statistics': {
-                'input_images': len(imgs),
-                'output_resolution': f'{result.shape[1]}x{result.shape[0]}',
-                'processing_time': f'{processing_time:.2f}s'
-            },
-            'processing_time': round(processing_time, 2),
-            'image_count': len(imgs),
-            'result_dimensions': result.shape[:2]
-        })
+            # Handle stitching errors
+            error_messages = {
+                cv.Stitcher_ERR_NEED_MORE_IMGS: "Need more images",
+                cv.Stitcher_ERR_HOMOGRAPHY_EST_FAIL: "Homography estimation failed - images may not overlap enough",
+                cv.Stitcher_ERR_CAMERA_PARAMS_ADJUST_FAIL: "Camera parameter adjustment failed"
+            }
+            error_msg = error_messages.get(status, f"Unknown stitching error (code: {status})")
+            print(f"[ERROR] OpenCV Stitcher failed: {error_msg}")
+            return jsonify({'error': f'Stitching failed: {error_msg}'}), 500
         
     except Exception as e:
         print(f"Stitching error: {e}")
@@ -603,18 +673,12 @@ def api_test():
     print("🧪 Test API called")
     return jsonify({"status": "working", "message": "API is responding"})
 
-@app.route('/debug/routes')
-def debug_routes():
-    """Debug endpoint to show all registered routes"""
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append({
-            'endpoint': rule.endpoint,
-            'methods': list(rule.methods),
-            'rule': rule.rule
-        })
-    return jsonify({"routes": routes, "total": len(routes)})
+# Debug routes function removed - duplicate of debug_routes above
 
+# Debug: List all registered routes
+print("\n[DEBUG] All registered routes:")
+for rule in app.url_map.iter_rules():
+    print(f"[DEBUG] Route: {rule.rule} -> {rule.endpoint}")
 
 if __name__ == '__main__':
     print("🚀 Starting Computer Vision Portfolio Website...")

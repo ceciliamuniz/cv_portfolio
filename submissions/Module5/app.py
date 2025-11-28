@@ -20,6 +20,28 @@ print(f"[DEBUG] Template exists: {(template_dir / 'module5.html').exists()}")
 module5_bp = Blueprint('module5', __name__, 
                       template_folder=str(template_dir))
 
+# Utility endpoint: Generate and save a dummy NPZ mask file
+@module5_bp.route('/api/sam2/generate_mask', methods=['POST'])
+def sam2_generate_mask():
+    """Generate and save a dummy NPZ mask file on the server."""
+    try:
+        import numpy as np
+        from pathlib import Path
+        # Create dummy mask (480x640, circular region)
+        h, w = 480, 640
+        mask = np.zeros((h, w), dtype=np.uint8)
+        center_x, center_y = w // 2, h // 2
+        radius = min(h, w) // 4
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center_x)**2 + (Y - center_y)**2)
+        mask[dist_from_center <= radius] = 1
+        # Save to NPZ file in the current directory
+        mask_path = Path(__file__).parent / 'sam2_mask.npz'
+        np.savez(mask_path, mask=mask)
+        return jsonify({'success': True, 'path': str(mask_path), 'shape': mask.shape})
+    except Exception as e:
+        return jsonify({'error': f'Failed to generate mask: {str(e)}'}), 500
+
 # Global tracker state and synchronization lock
 tracker = None
 tracker_mode = None
@@ -318,16 +340,22 @@ def sam2_upload():
 
     if file:
         try:
-            # In real implementation, you would load the actual NPZ file:
-            # data = np.load(file)
-            # sam2_mask = data['mask']  # or whatever key contains the mask
-            
-            # For now, mock SAM2 mask loading - generate dummy mask for demo
-            sam2_mask = create_dummy_mask(480, 640)
-            print("SAM2 mask file uploaded and processed (currently mocked with dummy mask).")
-            return jsonify({'status': 'NPZ file uploaded successfully! (Currently using dummy mask for demo)', 
+            # Load the actual NPZ file and extract the mask
+            import numpy as np
+            from io import BytesIO
+            npz_bytes = BytesIO(file.read())
+            data = np.load(npz_bytes)
+            # Try common keys: 'mask', 'arr_0', etc.
+            if 'mask' in data:
+                sam2_mask = data['mask']
+            elif 'arr_0' in data:
+                sam2_mask = data['arr_0']
+            else:
+                raise KeyError("No 'mask' or 'arr_0' key found in NPZ file.")
+            print("SAM2 mask file uploaded and processed.")
+            return jsonify({'status': 'NPZ file uploaded successfully!', 
                            'size': sam2_mask.shape,
-                           'note': 'Real NPZ processing not implemented yet'})
+                           'note': 'Real mask loaded from NPZ'})
         except Exception as e:
             print(f"SAM2 upload error: {e}")
             return jsonify({'error': f'Failed to process mask: {str(e)}'}), 500
@@ -345,15 +373,20 @@ def sam2_mask_get():
 
 @module5_bp.route('/')
 def module5_page():
-    # Add cache-busting headers
-    from flask import make_response
-    import time
-    
-    response = make_response(render_template('module5.html', cache_buster=int(time.time())))
-    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['Expires'] = '0'
-    return response
+    try:
+        # Add cache-busting headers
+        from flask import make_response
+        import time
+        
+        print(f"[DEBUG] Module 5 route accessed - rendering template")
+        response = make_response(render_template('module5.html', cache_buster=int(time.time())))
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        return response
+    except Exception as e:
+        print(f"[ERROR] Module 5 template error: {e}")
+        return f"<h1>Module 5: Real-Time Object Tracker</h1><p>Error: {str(e)}</p>"
 
 @module5_bp.route('/test')
 def module5_test():
@@ -368,10 +401,62 @@ def module5_test():
             '/module5/api/track/init - Initialize tracker',
             '/module5/api/track - Process frames',
             '/module5/api/track/stop - Stop tracking',
-            '/module5/api/sam2/upload - Upload SAM2 mask'
+            '/module5/api/sam2/upload - Upload SAM2 mask',
+            '/module5/api/sam2/segment - Run SAM segmentation'
         ]
     })
 
+@module5_bp.route('/api/sam2/segment', methods=['POST'])
+def sam2_segment():
+    """Run SAM segmentation on uploaded image and return mask and metadata."""
+    try:
+        from segment_anything import sam_model_registry, SamAutomaticMaskGenerator
+        import torch
+        import cv2
+        import os
+        # Path to SAM weights (update if needed)
+        CHECKPOINT_PATH = os.path.join(str(Path(__file__).parent), "sam_vit_h_4b8939.pth")
+        DEVICE = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+        MODEL_TYPE = "vit_h"
+        sam = sam_model_registry[MODEL_TYPE](checkpoint=CHECKPOINT_PATH).to(device=DEVICE)
+        mask_generator = SamAutomaticMaskGenerator(sam)
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file part'}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'error': 'No selected file'}), 400
+
+        # Read image
+        file_bytes = np.frombuffer(file.read(), np.uint8)
+        image_bgr = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if image_bgr is None:
+            return jsonify({'error': 'Could not decode image'}), 400
+        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+        # Run SAM segmentation
+        sam_result = mask_generator.generate(image_rgb)
+        if not sam_result:
+            return jsonify({'error': 'No masks found'}), 200
+
+        # Use largest mask
+        largest_mask = max(sam_result, key=lambda x: x['area'])
+        mask = largest_mask['segmentation'].astype(np.uint8) * 255
+        _, mask_png = cv2.imencode('.png', mask)
+        mask_b64 = base64.b64encode(mask_png).decode('utf-8')
+
+        # Return mask and metadata
+        return jsonify({
+            'success': True,
+            'mask_base64': f'data:image/png;base64,{mask_b64}',
+            'area': int(largest_mask['area']),
+            'bbox': largest_mask['bbox'],
+            'predicted_iou': float(largest_mask['predicted_iou']),
+            'stability_score': float(largest_mask['stability_score'])
+        })
+    except Exception as e:
+        return jsonify({'error': f'SAM segmentation failed: {str(e)}'}), 500
+    
 @module5_bp.route('/info')
 def info():
     return '<h2>Module 5: Real-Time Object Tracker Backend</h2><p>Integrated into main portfolio.</p>'

@@ -1,52 +1,265 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="container mt-4">
-  <h2>Module 7: Object Size Estimation (Stereo)</h2>
-  <form id="stereo-form" enctype="multipart/form-data">
-    <div class="mb-3">
-      <label for="left" class="form-label">Left Image</label>
-      <input type="file" class="form-control" id="left" name="left" accept="image/*" required>
+  <div class="row">
+    <div class="col-12">
+      <h1 class="display-5 mb-4">
+        <i class="fas fa-cube"></i> Module 7: Advanced Computer Vision
+      </h1>
+      <p class="lead mb-5">
+        Advanced stereo vision and pose estimation implementations with real-time processing capabilities.
+      </p>
     </div>
-    <div class="mb-3">
-      <label for="right" class="form-label">Right Image</label>
-      <input type="file" class="form-control" id="right" name="right" accept="image/*" required>
+  </div>
+
+  <div class="row g-4 mb-5">
+    <!-- Part 1: Stereo Size Estimation -->
+    <div class="col-md-6">
+      <div class="card h-100 border-primary">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">
+            <i class="fas fa-ruler-combined"></i> Part 1: Stereo Size Estimation
+          </h4>
+        </div>
+        <div class="card-body">
+          <p class="card-text">
+            Object size estimation using calibrated stereo vision. Measures real-world dimensions of 
+            rectangles, circles, and polygons from stereo image pairs.
+          </p>
+          <ul class="list-unstyled">
+            <li><i class="fas fa-check text-success"></i> Calibrated stereo camera system</li>
+            <li><i class="fas fa-check text-success"></i> Depth estimation from disparity</li>
+            <li><i class="fas fa-check text-success"></i> Multi-shape dimension measurement</li>
+            <li><i class="fas fa-check text-success"></i> Real-world accuracy validation</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary" onclick="showStereoInterface()">
+            <i class="fas fa-play"></i> Launch Stereo Estimation
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="mb-3">
-      <label for="mask" class="form-label">Object Mask (binary)</label>
-      <input type="file" class="form-control" id="mask" name="mask" accept="image/*" required>
+
+    <!-- Part 3: Pose Estimation & Hand Tracking -->
+    <div class="col-md-6">
+      <div class="card h-100 border-success">
+        <div class="card-header bg-success text-white">
+          <h4 class="mb-0">
+            <i class="fas fa-running"></i> Part 3: Pose & Hand Tracking
+          </h4>
+        </div>
+        <div class="card-body">
+          <p class="card-text">
+            Real-time pose estimation and hand tracking using MediaPipe with comprehensive 
+            data recording and CSV export functionality.
+          </p>
+          <ul class="list-unstyled">
+            <li><i class="fas fa-check text-success"></i> Real-time webcam processing</li>
+            <li><i class="fas fa-check text-success"></i> 33-point pose estimation</li>
+            <li><i class="fas fa-check text-success"></i> Dual-hand tracking (42 points)</li>
+            <li><i class="fas fa-check text-success"></i> CSV data export with timestamps</li>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="/module7/pose" class="btn btn-success">
+            <i class="fas fa-video"></i> Launch Pose Tracking
+          </a>
+        </div>
+      </div>
     </div>
-    <button type="submit" class="btn btn-primary">Estimate Size</button>
-  </form>
-  <div id="result" class="mt-4"></div>
+  </div>
+
+  <!-- Stereo Interface (Initially Hidden) -->
+  <div id="stereo-interface" class="card" style="display: none;">
+    <div class="card-header bg-primary text-white">
+      <h4 class="mb-0">
+        <i class="fas fa-ruler-combined"></i> Stereo Size Estimation Interface
+        <button class="btn btn-sm btn-outline-light float-end" onclick="hideStereoInterface()">
+          <i class="fas fa-times"></i> Close
+        </button>
+      </h4>
+    </div>
+    <div class="card-body">
+      <div class="alert alert-success mb-4">
+        <h6><i class="fas fa-mobile-alt"></i> Your Phone's Calibrated Stereo Vision</h6>
+        <p class="mb-2">Using <strong>hardcoded calibration from your Module 1 phone camera</strong>:</p>
+        <div class="row">
+          <div class="col-md-6">
+            <ul class="mb-0">
+              <li><strong>fx:</strong> 640.84 pixels (horizontal focal length)</li>
+              <li><strong>fy:</strong> 648.80 pixels (vertical focal length)</li>
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <ul class="mb-0">
+              <li><strong>cx:</strong> 294.25 pixels (optical center x)</li>
+              <li><strong>cy:</strong> 349.31 pixels (optical center y)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      
+      <div class="alert alert-info mb-4">
+        <h6><i class="fas fa-search"></i> How Object Detection Works</h6>
+        <p class="mb-2">The system automatically finds objects using a multi-step process:</p>
+        <div class="row">
+          <div class="col-md-6">
+            <ol class="mb-0">
+              <li><strong>Edge Detection:</strong> Canny edge detector finds object boundaries</li>
+              <li><strong>Adaptive Threshold:</strong> Handles varying lighting conditions</li>
+              <li><strong>Contour Analysis:</strong> Identifies closed shapes and objects</li>
+            </ol>
+          </div>
+          <div class="col-md-6">
+            <ol start="4" class="mb-0">
+              <li><strong>Size Filtering:</strong> Only measures objects >1000 pixels</li>
+              <li><strong>Shape Classification:</strong> Rectangles, circles, or polygons</li>
+              <li><strong>Depth Integration:</strong> Uses stereo disparity for 3D measurement</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+      
+      <form id="stereo-form" enctype="multipart/form-data">
+        <div class="row">
+          <div class="col-md-3">
+            <div class="mb-3">
+              <label for="left" class="form-label">Left Stereo Image</label>
+              <input type="file" class="form-control" id="left" name="left" accept=".jpg,.jpeg,.png,.bmp,.tiff" required>
+              <div class="form-text">Left camera image</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="mb-3">
+              <label for="right" class="form-label">Right Stereo Image</label>
+              <input type="file" class="form-control" id="right" name="right" accept=".jpg,.jpeg,.png,.bmp,.tiff" required>
+              <div class="form-text">Right camera image</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="mb-3">
+              <label for="calibration" class="form-label">Stereo Calibration</label>
+              <input type="file" class="form-control" id="calibration" name="calibration" accept=".npz,.json,.xml,.yml,.yaml">
+              <div class="form-text">Calibration file (optional)</div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="mb-3">
+              <label for="manual_distance" class="form-label">Known Distance (Optional)</label>
+              <div class="input-group">
+                <input type="number" class="form-control" id="manual_distance" name="manual_distance" step="0.1" min="10" max="5000" placeholder="e.g. 500">
+                <span class="input-group-text">mm</span>
+              </div>
+              <div class="form-text">For validation vs stereo calculation</div>
+            </div>
+          </div>
+          <div class="col-md-12">
+
+          </div>
+        </div>
+        <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+          <button type="submit" class="btn btn-primary btn-lg">
+            <i class="fas fa-calculator"></i> Calculate Object Size
+          </button>
+        </div>
+      </form>
+      
+      <div id="result" class="mt-4"></div>
+    </div>
+  </div>
 </div>
+
+<script>
+function showStereoInterface() {
+  document.getElementById('stereo-interface').style.display = 'block';
+  document.getElementById('stereo-interface').scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideStereoInterface() {
+  document.getElementById('stereo-interface').style.display = 'none';
+}
+</script>
 {% endblock %}
 {% block scripts %}
 <script>
 document.getElementById('stereo-form').onsubmit = async function(e) {
   e.preventDefault();
-  const formData = new FormData(this);
-  const res = await fetch('/api/stereo/estimate', {
+  
+  try {
+    const formData = new FormData(this);
+  
+  // Check if required files are present
+  const leftFile = document.getElementById('left').files[0];
+  const rightFile = document.getElementById('right').files[0];
+  
+  if (!leftFile || !rightFile) {
+    alert('Please select both left and right images.');
+    return;
+  }
+  
+  // Debug: log what we're sending
+  const calibrationFile = document.getElementById('calibration').files[0];
+  const manualDistance = document.getElementById('manual_distance').value;
+  console.log('Sending files:', {
+    left: leftFile ? leftFile.name + ' (' + leftFile.size + ' bytes)' : 'none',
+    right: rightFile ? rightFile.name + ' (' + rightFile.size + ' bytes)' : 'none',
+    calibration: calibrationFile ? calibrationFile.name + ' (' + calibrationFile.size + ' bytes)' : 'using default parameters',
+    manual_distance: manualDistance ? manualDistance + ' mm' : 'using stereo calculation'
+  });
+  
+  // Show processing indicator
+  document.getElementById('result').innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Processing stereo images...</div>';
+  
+  const res = await fetch('http://localhost:5000/module7/api/stereo/estimate', {
     method: 'POST',
     body: formData
   });
   const data = await res.json();
   let html = '';
-  if (data.results) {
-    data.results.forEach(obj => {
-      html += `<div><b>Shape:</b> ${obj.shape}<br>`;
+  
+  if (data.success && data.results) {
+    html += '<div class="alert alert-success"><h5>Stereo Size Estimation Results</h5>';
+    
+    if (data.processing_info) {
+      html += `<p><small>Detection Mode: ${data.processing_info.automatic_detection ? 'Automatic' : 'Manual Mask'}</small></p>`;
+    }
+    
+    data.results.forEach((obj, index) => {
+      html += `<div class="card mb-3"><div class="card-body">`;
+      html += `<h6>Object ${index + 1}: <span class="badge bg-primary">${obj.shape}</span></h6>`;
+      
       for (const [k, v] of Object.entries(obj.dimensions)) {
         if (Array.isArray(v)) {
-          html += `<b>${k}:</b> ${v.map(x => x.toFixed(2)).join(', ')} m<br>`;
+          // Handle arrays of measurements
+          html += `<p><strong>${k}:</strong> ${v.join(', ')}</p>`;
         } else {
-          html += `<b>${k}:</b> ${v.toFixed(2)} m<br>`;
+          // Handle single values (could be numbers or strings with units)
+          html += `<p><strong>${k}:</strong> ${v}</p>`;
         }
       }
-      html += '</div><hr>';
+      html += '</div></div>';
     });
+    html += '</div>';
   } else {
-    html = `<div class="text-danger">${data.error}</div>`;
+    html = `<div class="alert alert-danger"><strong>Error:</strong> ${data.error || 'Unknown error occurred'}</div>`;
   }
+  
   document.getElementById('result').innerHTML = html;
+  
+  } catch (error) {
+    console.error('Stereo estimation error:', error);
+    document.getElementById('result').innerHTML = '<div class="alert alert-danger"><strong>Network Error:</strong> ' + error.message + '</div>';
+  }
 };
+
+function showStereoInterface() {
+  document.getElementById('stereo-interface').style.display = 'block';
+  document.getElementById('stereo-interface').scrollIntoView({ behavior: 'smooth' });
+}
+
+function hideStereoInterface() {
+  document.getElementById('stereo-interface').style.display = 'none';
+}
 </script>
 {% endblock %}

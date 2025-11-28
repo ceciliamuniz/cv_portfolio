@@ -16,27 +16,30 @@ import sys
 # Prefer package-relative imports; fall back to path insert if needed
 ARUCO_AVAILABLE = False
 SAM2_AVAILABLE = False
+# Import process_all_images at top level to avoid runtime import issues
+PROCESS_ALL_IMAGES = None
 try:
-    from ..part4_aruco_segmentation.aruco_segmentation import ArucoSegmentation
+    from ..part4_aruco_segmentation.aruco_segmentation import ArucoSegmentation, process_all_images
     ARUCO_AVAILABLE = True
-except Exception:
+    PROCESS_ALL_IMAGES = process_all_images
+    print("[DEBUG] ArUco import successful via relative import")
+except Exception as e1:
+    print(f"[DEBUG] Relative import failed: {e1}")
     try:
-        sys.path.insert(0, str(Path(__file__).parent.parent / 'part4_aruco_segmentation'))
-        from aruco_segmentation import ArucoSegmentation  # type: ignore
+        # More robust absolute import path
+        aruco_path = Path(__file__).parent.parent / 'part4_aruco_segmentation'
+        sys.path.insert(0, str(aruco_path))
+        from aruco_segmentation import ArucoSegmentation, process_all_images  # type: ignore
         ARUCO_AVAILABLE = True
-    except Exception:
+        PROCESS_ALL_IMAGES = process_all_images
+        print("[DEBUG] ArUco import successful via path insert")
+    except Exception as e2:
+        print(f"[DEBUG] Path insert import failed: {e2}")
         ARUCO_AVAILABLE = False
+        PROCESS_ALL_IMAGES = None
 
-try:
-    from ..part5_sam2_comparison.sam2_comparison import SAM2Segmentation, SegmentationComparison
-    SAM2_AVAILABLE = True
-except Exception:
-    try:
-        sys.path.insert(0, str(Path(__file__).parent.parent / 'part5_sam2_comparison'))
-        from sam2_comparison import SAM2Segmentation, SegmentationComparison  # type: ignore
-        SAM2_AVAILABLE = True
-    except Exception:
-        SAM2_AVAILABLE = False
+# SAM2 functionality removed - user will handle Part 5 separately
+SAM2_AVAILABLE = False
 
 # Create Blueprint
 module3_bp = Blueprint('module3', __name__, 
@@ -152,148 +155,131 @@ def part3():
     return render_template('module3_part3.html', images=images)
 
 
-@module3_bp.route('/part4-aruco', methods=['GET', 'POST'])
+@module3_bp.route('/part4-aruco')
 def part4_aruco():
-    """Part 4: ArUco Marker-Based Segmentation."""
-    if not ARUCO_AVAILABLE:
-        # GET request - show informational page
-        if request.method == 'GET':
-            return render_template('module3_part4.html', sam2_available=SAM2_AVAILABLE, 
-                                   error='Aruco module not available. Ensure opencv-contrib-python is installed.'), 200
-        return jsonify({'error': 'Aruco module not available'}), 500
-    if request.method == 'POST':
-        # Handle image upload and processing
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
+    """Part 4: ArUco Marker-Based Segmentation - Use working retry interface."""
+    return render_template('module3_part4.html')
+
+
+@module3_bp.route('/test-route', methods=['GET', 'POST'])
+def test_route():
+    """Simple test route."""
+    return jsonify({'message': 'Test route working!'})
+
+@module3_bp.route('/part4-aruco-batch', methods=['POST'])
+def part4_aruco_batch():
+    """Process hardcoded batch using retry code directly."""
+    try:
+        print("[DEBUG] Starting part4_aruco_batch processing")
+        # Import and use the retry folder's code directly
+        retry_path = Path(__file__).parent.parent / 'part4_retry'
+        print(f"[DEBUG] Retry path: {retry_path}")
+        print(f"[DEBUG] Retry path exists: {retry_path.exists()}")
         
-        file = request.files['file']
+        sys.path.insert(0, str(retry_path))
+        
+        from aruco_segmentation import ArucoSegmentation
+        import time
+        print("[DEBUG] ArUco segmentation imported successfully")
+        
+        # Get list of image files
+        images_dir = retry_path / 'images'
+        print(f"[DEBUG] Images directory: {images_dir}")
+        print(f"[DEBUG] Images directory exists: {images_dir.exists()}")
+        
+        image_files = [f.name for f in images_dir.glob('*.png') if f.is_file()]
+        print(f"[DEBUG] Found {len(image_files)} image files: {image_files}")
+        
+        segmenter = ArucoSegmentation()
+        results = []
+        start_time = time.time()
+        
+        for i, img_name in enumerate(image_files, 1):
+            img_path = images_dir / img_name
+            print(f"[DEBUG] Processing {img_path}")
+            result = segmenter.process_image(str(img_path))
+            print(f"[DEBUG] Result for {img_name}: {result}")
+            if result:
+                results.append({
+                    'image': img_name,
+                    'markers_detected': result.get('markers_detected', 0),
+                    'processing_time': result.get('processing_time', 0)
+                })
+                print(f"[{i}/{len(image_files)}] {img_name}: {result.get('markers_detected', 0)} markers detected")
+        
+        total_time = time.time() - start_time
+        total_markers = sum(r['markers_detected'] for r in results)
+        
+        response_data = {
+            'success': True,
+            'processing_time': f'{total_time:.2f}s',
+            'total_images': len(image_files),
+            'processed_images': len(results),
+            'total_markers_detected': total_markers,
+            'dictionary_used': 'DICT_6X6_1000',
+            'message': f'Processed {len(results)} images successfully',
+            'results': results
+        }
+        print(f"[DEBUG] Final response: {response_data}")
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"[ERROR] Exception in part4_aruco_batch: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Processing failed: {str(e)}'}), 500
+
+
+@module3_bp.route('/part4-aruco-single', methods=['POST'])
+def part4_aruco_single():
+    """Process single image using retry code directly."""
+    try:
+        if 'image' not in request.files:
+            return jsonify({'error': 'No image provided'}), 400
+        
+        file = request.files['image']
         if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
+            return jsonify({'error': 'No image selected'}), 400
         
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = UPLOAD_FOLDER / filename
-            file.save(str(filepath))
+        # Save uploaded file temporarily
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_file:
+            file.save(tmp_file.name)
             
-            # Process with ArUco
-            method = request.form.get('method', 'convex_hull')
+            # Import and use the retry folder's code directly
+            retry_path = Path(__file__).parent.parent / 'part4_retry'
+            sys.path.insert(0, str(retry_path))
+            
+            from aruco_segmentation import ArucoSegmentation
+            
             segmenter = ArucoSegmentation()
+            result = segmenter.process_image(tmp_file.name)
             
-            result = segmenter.process_image(
-                filepath,
-                RESULTS_FOLDER / 'aruco',
-                method=method
-            )
+            # Clean up temp file
+            import os
+            os.unlink(tmp_file.name)
             
-            if 'error' in result:
-                return jsonify(result), 400
-            
-            # Return results
-            return jsonify({
-                'success': True,
-                'markers_detected': result['markers_detected'],
-                'marker_ids': result['marker_ids'],
-                'area_pixels': result['area_pixels'],
-                'perimeter_pixels': result['perimeter_pixels'],
-                'mask_url': f'/module3/static/results/aruco/{Path(result["mask_saved"]).name}',
-                'visualization_url': f'/module3/static/results/aruco/{Path(result["visualization_saved"]).name}'
-            })
-    
-    # GET request - show upload form
-    return render_template('module3_part4.html', sam2_available=SAM2_AVAILABLE)
+            if result:
+                return jsonify({
+                    'success': True,
+                    'markers_detected': result.get('markers_detected', 0),
+                    'processing_time': result.get('processing_time', 0),
+                    'message': f'Detected {result.get("markers_detected", 0)} markers'
+                })
+            else:
+                return jsonify({'error': 'Processing failed'}), 500
+                
+    except Exception as e:
+        return jsonify({'error': f'Processing failed: {str(e)}'}), 500
 
 
 @module3_bp.route('/part5-sam2-comparison', methods=['GET', 'POST'])
 def part5_sam2():
-    """Part 5: SAM2 Comparison."""
-    if not SAM2_AVAILABLE:
-        return render_template('module3_part5.html', 
-                             sam2_available=False,
-                             error='SAM2 is not installed. Please install required dependencies.')
-    
-    if request.method == 'POST':
-        # Handle comparison request
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if file and allowed_file(file.filename):
-            filename = secure_filename(file.filename)
-            filepath = UPLOAD_FOLDER / filename
-            file.save(str(filepath))
-            
-            # First run ArUco segmentation
-            aruco_segmenter = ArucoSegmentation()
-            aruco_result = aruco_segmenter.process_image(
-                filepath,
-                RESULTS_FOLDER / 'aruco',
-                method='convex_hull'
-            )
-            
-            if 'error' in aruco_result:
-                return jsonify({'error': f'ArUco failed: {aruco_result["error"]}'}), 400
-            
-            # Load ArUco mask
-            aruco_mask = cv.imread(aruco_result['mask_saved'], cv.IMREAD_GRAYSCALE)
-            
-            # Get marker centers as SAM2 prompts
-            image = cv.imread(str(filepath))
-            image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
-            
-            corners, ids, _ = aruco_segmenter.detect_markers(image)
-            marker_centers = aruco_segmenter.get_marker_centers(corners)
-            
-            # Run SAM2 (if checkpoint available)
-            checkpoint_path = request.form.get('checkpoint_path')
-            if not checkpoint_path:
-                checkpoint_path = Path(__file__).parent.parent / 'part5_sam2_comparison' / 'checkpoints' / 'sam2_hiera_large.pt'
-            
-            try:
-                sam2 = SAM2Segmentation(checkpoint_path=str(checkpoint_path))
-                sam2_mask = sam2.segment_with_points(image_rgb, marker_centers)
-            except Exception as e:
-                return jsonify({'error': f'SAM2 failed: {str(e)}'}), 500
-            
-            # Calculate comparison metrics
-            comparison = SegmentationComparison()
-            iou = comparison.calculate_iou(aruco_mask, sam2_mask)
-            dice = comparison.calculate_dice(aruco_mask, sam2_mask)
-            precision, recall = comparison.calculate_precision_recall(sam2_mask, aruco_mask)
-            
-            metrics = {
-                'iou': iou,
-                'dice': dice,
-                'precision': precision,
-                'recall': recall
-            }
-            
-            # Create visualization
-            vis = comparison.visualize_comparison(image, aruco_mask, sam2_mask, metrics)
-            
-            # Save results
-            vis_path = RESULTS_FOLDER / 'sam2' / f'{filepath.stem}_comparison.jpg'
-            vis_path.parent.mkdir(parents=True, exist_ok=True)
-            cv.imwrite(str(vis_path), vis)
-            
-            sam2_mask_path = RESULTS_FOLDER / 'sam2' / f'{filepath.stem}_sam2_mask.png'
-            cv.imwrite(str(sam2_mask_path), sam2_mask)
-            
-            return jsonify({
-                'success': True,
-                'metrics': metrics,
-                'aruco_markers': len(ids),
-                'aruco_area': int((aruco_mask > 0).sum()),
-                'sam2_area': int((sam2_mask > 0).sum()),
-                'comparison_url': f'/module3/static/results/sam2/{vis_path.name}',
-                'sam2_mask_url': f'/module3/static/results/sam2/{sam2_mask_path.name}',
-                'aruco_mask_url': f'/module3/static/results/aruco/{Path(aruco_result["mask_saved"]).name}'
-            })
-    
-    # GET request
-    return render_template('module3_part5.html', sam2_available=True)
+    """Part 5: SAM2 Comparison - Handled separately by user."""
+    return render_template('module3_part5.html', 
+                         sam2_available=False,
+                         error='Part 5 will be handled separately - results will be uploaded manually.')
 
 
 @module3_bp.route('/gallery')

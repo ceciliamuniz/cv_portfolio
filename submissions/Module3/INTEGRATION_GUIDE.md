@@ -11,7 +11,6 @@ part4_aruco_segmentation/
 ├── aruco_segmentation.py      # Main processing script
 ├── PART4_README.md           # Documentation
 ├── images/                    # Input images (your captures)
-├── aruco_markers/            # Generated printable markers
 └── outputs/                  # Segmentation results
     ├── convex_hull/
     └── contour/

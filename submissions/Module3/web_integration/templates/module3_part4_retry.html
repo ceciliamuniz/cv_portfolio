@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module 3 Part 4 - ArUco Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .preview-container { 
+            max-height: 400px; 
+            overflow: auto; 
+            border: 2px dashed #dee2e6; 
+            border-radius: 8px; 
+            padding: 20px; 
+            margin: 10px 0;
+            text-align: center;
+            background: #f8f9fa;
+        }
+        .preview-container.dragover {
+            border-color: #0d6efd;
+            background-color: rgba(13, 110, 253, 0.1);
+        }
+        .result-image { 
+            max-width: 100%; 
+            height: auto; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin: 10px 0;
+        }
+        .progress { display: none; margin: 20px 0; }
+        .stats-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        .segmentation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .segment-item {
+            background: white;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .dictionary-selector {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .batch-results {
+            max-height: 500px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-primary shadow">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fas fa-qrcode"></i> Module 3 Part 4 - ArUco Detection & Segmentation
+            </span>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body">
+                        <h3><i class="fas fa-search"></i> ArUco Marker Detection</h3>
+                        <p class="text-muted mb-0">
+                            Upload images to detect ArUco markers and perform GrabCut segmentation on detected objects.
+                            Supports various dictionary types for optimal marker recognition.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dictionary Selection -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="dictionary-selector">
+                    <h5><i class="fas fa-cog"></i> Detection Settings</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label for="dictionarySelect" class="form-label">ArUco Dictionary:</label>
+                            <select id="dictionarySelect" class="form-select">
+                                <option value="DICT_4X4_50">DICT_4X4_50 (50 markers)</option>
+                                <option value="DICT_4X4_100">DICT_4X4_100 (100 markers)</option>
+                                <option value="DICT_4X4_250">DICT_4X4_250 (250 markers)</option>
+                                <option value="DICT_4X4_1000">DICT_4X4_1000 (1000 markers)</option>
+                                <option value="DICT_5X5_50">DICT_5X5_50 (50 markers)</option>
+                                <option value="DICT_5X5_100">DICT_5X5_100 (100 markers)</option>
+                                <option value="DICT_5X5_250">DICT_5X5_250 (250 markers)</option>
+                                <option value="DICT_5X5_1000">DICT_5X5_1000 (1000 markers)</option>
+                                <option value="DICT_6X6_50">DICT_6X6_50 (50 markers)</option>
+                                <option value="DICT_6X6_100">DICT_6X6_100 (100 markers)</option>
+                                <option value="DICT_6X6_250">DICT_6X6_250 (250 markers)</option>
+                                <option value="DICT_6X6_1000" selected>DICT_6X6_1000 (1000 markers)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Processing Mode:</label>
+                            <div>
+                                <input type="radio" class="btn-check" name="processingMode" id="singleMode" value="single" checked>
+                                <label class="btn btn-outline-primary" for="singleMode">Single Image</label>
+                                
+                                <input type="radio" class="btn-check" name="processingMode" id="batchMode" value="batch">
+                                <label class="btn btn-outline-secondary" for="batchMode">Batch Processing</label>
+                                
+                                <input type="radio" class="btn-check" name="processingMode" id="hardcodedMode" value="hardcoded">
+                                <label class="btn btn-outline-success" for="hardcodedMode">Hardcoded 10 Images</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Upload Section -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-upload"></i> Upload Images</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Single Image Upload -->
+                        <div id="singleUpload">
+                            <form id="singleImageForm" enctype="multipart/form-data">
+                                <div class="preview-container" id="singlePreview">
+                                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted">Drag and drop an image here, or click to select</p>
+                                    <input type="file" id="singleImageInput" accept="image/*" class="d-none">
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="fas fa-search"></i> Detect ArUco Markers
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Batch Upload -->
+                        <div id="batchUpload" style="display: none;">
+                            <form id="batchImageForm" enctype="multipart/form-data">
+                                <div class="preview-container" id="batchPreview">
+                                    <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                                    <p class="text-muted">Drag and drop multiple images here, or click to select</p>
+                                    <input type="file" id="batchImageInput" accept="image/*" multiple class="d-none">
+                                </div>
+                                <button type="submit" class="btn btn-secondary w-100">
+                                    <i class="fas fa-cogs"></i> Process Batch
+                                </button>
+                            </form>
+                        </div>
+
+                        <!-- Hardcoded Images -->
+                        <div id="hardcodedUpload" style="display: none;">
+                            <form id="hardcodedImageForm">
+                                <div class="preview-container">
+                                    <i class="fas fa-folder-open fa-3x text-success mb-3"></i>
+                                    <h5 class="text-success">Hardcoded Dataset</h5>
+                                    <p class="text-muted">Process the 10 pre-loaded ArUco test images</p>
+                                    <small class="text-muted">img1.png through img10.png</small>
+                                </div>
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="fas fa-play"></i> Process 10 Hardcoded Images
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Section -->
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-chart-line"></i> Detection Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="results" class="text-center text-muted">
+                            <i class="fas fa-info-circle fa-2x mb-3"></i>
+                            <p>Upload images to see ArUco detection results</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Results Section -->
+        <div class="row mt-4" id="detailedResults" style="display: none;">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white">
+                        <h5 class="mb-0"><i class="fas fa-microscope"></i> Segmentation Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="segmentationResults"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // UI Elements
+        const singleImageForm = document.getElementById('singleImageForm');
+        const batchImageForm = document.getElementById('batchImageForm');
+        const hardcodedImageForm = document.getElementById('hardcodedImageForm');
+        const singleImageInput = document.getElementById('singleImageInput');
+        const batchImageInput = document.getElementById('batchImageInput');
+        const singlePreview = document.getElementById('singlePreview');
+        const batchPreview = document.getElementById('batchPreview');
+        const singleUpload = document.getElementById('singleUpload');
+        const batchUpload = document.getElementById('batchUpload');
+        const hardcodedUpload = document.getElementById('hardcodedUpload');
+        const resultsDiv = document.getElementById('results');
+        const detailedResults = document.getElementById('detailedResults');
+        const segmentationResults = document.getElementById('segmentationResults');
+        const progress = document.querySelector('.progress');
+        const progressBar = document.querySelector('.progress-bar');
+
+        // Mode switching
+        document.querySelectorAll('input[name="processingMode"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                // Hide all upload sections
+                singleUpload.style.display = 'none';
+                batchUpload.style.display = 'none';
+                hardcodedUpload.style.display = 'none';
+                
+                // Show selected section
+                if (this.value === 'single') {
+                    singleUpload.style.display = 'block';
+                } else if (this.value === 'batch') {
+                    batchUpload.style.display = 'block';
+                } else if (this.value === 'hardcoded') {
+                    hardcodedUpload.style.display = 'block';
+                }
+                
+                clearResults();
+            });
+        });
+
+        // File input triggers
+        singlePreview.addEventListener('click', () => singleImageInput.click());
+        batchPreview.addEventListener('click', () => batchImageInput.click());
+
+        // Drag and drop
+        [singlePreview, batchPreview].forEach(preview => {
+            preview.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                preview.classList.add('dragover');
+            });
+
+            preview.addEventListener('dragleave', () => {
+                preview.classList.remove('dragover');
+            });
+
+            preview.addEventListener('drop', (e) => {
+                e.preventDefault();
+                preview.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (preview === singlePreview && files.length > 0) {
+                    singleImageInput.files = files;
+                    handleSingleImagePreview(files[0]);
+                } else if (preview === batchPreview) {
+                    batchImageInput.files = files;
+                    handleBatchImagePreview(files);
+                }
+            });
+        });
+
+        // File change handlers
+        singleImageInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleSingleImagePreview(e.target.files[0]);
+            }
+        });
+
+        batchImageInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleBatchImagePreview(e.target.files);
+            }
+        });
+
+        // Preview handlers
+        function handleSingleImagePreview(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                singlePreview.innerHTML = `
+                    <img src="${e.target.result}" class="result-image" alt="Preview">
+                    <p class="mt-2 mb-0 text-muted">${file.name}</p>
+                `;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleBatchImagePreview(files) {
+            batchPreview.innerHTML = `
+                <i class="fas fa-images fa-2x text-primary mb-2"></i>
+                <p class="mb-0"><strong>${files.length} images selected</strong></p>
+                <small class="text-muted">Ready for batch processing</small>
+            `;
+        }
+
+        // Form submissions
+        singleImageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const file = singleImageInput.files[0];
+            
+            if (!file) {
+                alert('Please select an image first');
+                return;
+            }
+            
+            formData.append('image', file);
+            formData.append('dictionary', document.getElementById('dictionarySelect').value);
+            
+            await processRequest('http://localhost:5003/api/detect-aruco', formData, 'single');
+        });
+
+        batchImageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const files = batchImageInput.files;
+            
+            if (files.length === 0) {
+                alert('Please select images first');
+                return;
+            }
+            
+            for (let file of files) {
+                formData.append('images', file);
+            }
+            formData.append('dictionary', document.getElementById('dictionarySelect').value);
+            
+            await processRequest('/api/batch-process', formData, 'batch');
+        });
+
+        hardcodedImageForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('dictionary', document.getElementById('dictionarySelect').value);
+            
+            await processRequest('/module3/part4-aruco-batch', formData, 'hardcoded');
+        });
+
+        // Process API request
+        async function processRequest(url, formData, mode) {
+            try {
+                showProgress();
+                clearResults();
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayResults(result, mode);
+                } else {
+                    throw new Error(result.error || 'Processing failed');
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Display results
+        function displayResults(result, mode) {
+            if (mode === 'single') {
+                displaySingleResults(result);
+            } else {
+                displayBatchResults(result);
+            }
+        }
+
+        function displaySingleResults(result) {
+            // Stats card
+            resultsDiv.innerHTML = `
+                <div class="stats-card mb-3">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h3 class="mb-0">${result.markers_detected}</h3>
+                            <small>Markers Found</small>
+                        </div>
+                        <div class="col-6">
+                            <h3 class="mb-0">${result.processing_time}</h3>
+                            <small>Processing Time</small>
+                        </div>
+                    </div>
+                    <hr class="bg-white opacity-25">
+                    <small><i class="fas fa-cog"></i> Dictionary: ${result.dictionary_used}</small>
+                </div>
+            `;
+
+            // Annotated image
+            if (result.annotated_image) {
+                resultsDiv.innerHTML += `
+                    <div class="text-center">
+                        <h6><i class="fas fa-search"></i> Detection Results</h6>
+                        <img src="${result.annotated_image}" class="result-image" alt="Annotated Image">
+                    </div>
+                `;
+            }
+
+            // Segmentation results
+            if (result.segmentation_results && result.segmentation_results.length > 0) {
+                displaySegmentationResults(result.segmentation_results);
+            }
+        }
+
+        function displayBatchResults(result) {
+            resultsDiv.innerHTML = `
+                <div class="stats-card mb-3">
+                    <div class="row text-center">
+                        <div class="col-4">
+                            <h3 class="mb-0">${result.processed_images}</h3>
+                            <small>Images Processed</small>
+                        </div>
+                        <div class="col-4">
+                            <h3 class="mb-0">${result.total_markers_detected}</h3>
+                            <small>Total Markers</small>
+                        </div>
+                        <div class="col-4">
+                            <h3 class="mb-0">${result.processing_time}</h3>
+                            <small>Processing Time</small>
+                        </div>
+                    </div>
+                    <hr class="bg-white opacity-25">
+                    <small><i class="fas fa-cog"></i> Dictionary: ${result.dictionary_used}</small>
+                </div>
+                <div class="batch-results">
+                    ${result.results.map(img => `
+                        <div class="d-flex justify-content-between align-items-center mb-2 p-2 border rounded">
+                            <div>
+                                <strong>${img.filename}</strong>
+                                ${img.success ? 
+                                    `<small class="text-success ms-2">${img.markers_detected} markers</small>` :
+                                    `<small class="text-danger ms-2">Failed: ${img.error}</small>`
+                                }
+                            </div>
+                            ${img.annotated_image ? 
+                                `<button class="btn btn-sm btn-outline-primary" onclick="showImageModal('${img.annotated_image}', '${img.filename}')">
+                                    <i class="fas fa-eye"></i> View
+                                </button>` : ''
+                            }
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function displaySegmentationResults(segmentationResults) {
+            let html = '<div class="segmentation-grid">';
+            
+            segmentationResults.forEach(segment => {
+                html += `
+                    <div class="segment-item">
+                        <h6>Marker ${segment.marker_id}</h6>
+                        ${segment.segmented_object ? 
+                            `<img src="${segment.segmented_object}" class="img-fluid mb-2" alt="Segmented Object">` : 
+                            '<p class="text-muted">No segmentation available</p>'
+                        }
+                        ${segment.mask ? 
+                            `<button class="btn btn-sm btn-outline-secondary" onclick="showImageModal('${segment.mask}', 'Mask for Marker ${segment.marker_id}')">
+                                <i class="fas fa-mask"></i> View Mask
+                            </button>` : ''
+                        }
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            
+            segmentationResults.innerHTML = html;
+            detailedResults.style.display = 'block';
+        }
+
+        // Utility functions
+        function showProgress() {
+            progress.style.display = 'block';
+            progressBar.style.width = '100%';
+        }
+
+        function hideProgress() {
+            setTimeout(() => {
+                progress.style.display = 'none';
+                progressBar.style.width = '0%';
+            }, 500);
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-info-circle fa-2x mb-3"></i>
+                    <p>Upload images to see ArUco detection results</p>
+                </div>
+            `;
+            detailedResults.style.display = 'none';
+        }
+
+        // Modal for viewing images
+        function showImageModal(imageSrc, title) {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">${title}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body text-center">
+                            <img src="${imageSrc}" class="img-fluid" alt="${title}">
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            modal.addEventListener('hidden.bs.modal', () => {
+                document.body.removeChild(modal);
+            });
+        }
+    </script>
+</body>
+</html>

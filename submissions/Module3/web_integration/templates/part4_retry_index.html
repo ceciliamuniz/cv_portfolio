@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Module 3 Part 4 - ArUco Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container-fluid { padding: 2rem; }
+        .main-card { background: rgba(255, 255, 255, 0.95); border-radius: 20px; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1); padding: 2rem; margin: 2rem 0; }
+        .header { text-align: center; margin-bottom: 2rem; padding: 1.5rem; background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 15px; color: white; }
+        .section-card { background: white; border-radius: 15px; padding: 1.5rem; margin: 1rem 0; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08); border: 1px solid #e0e6ed; }
+        .btn-mode { margin: 0.2rem; padding: 0.5rem 1rem; border-radius: 25px; transition: all 0.3s ease; }
+        .btn-mode.active { background: #667eea; color: white; border-color: #667eea; }
+        .upload-area { border: 2px dashed #667eea; border-radius: 15px; padding: 2rem; text-align: center; background: #f8f9fa; transition: all 0.3s ease; cursor: pointer; }
+        .upload-area:hover, .upload-area.dragover { background: rgba(102, 126, 234, 0.1); border-color: #764ba2; }
+        .upload-area.has-file { background: rgba(40, 167, 69, 0.1); border-color: #28a745; }
+        .btn-process { background: linear-gradient(135deg, #667eea, #764ba2); border: none; border-radius: 25px; padding: 0.75rem 2rem; color: white; font-weight: 600; transition: all 0.3s ease; }
+        .btn-process:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        .btn-process:disabled { background: #6c757d; transform: none; }
+        .results-area { min-height: 200px; }
+        .progress { height: 8px; border-radius: 10px; background: rgba(102, 126, 234, 0.1); overflow: hidden; margin: 1rem 0; }
+        .progress-bar { background: linear-gradient(90deg, #667eea, #764ba2); border-radius: 10px; }
+        .result-image { max-width: 100%; border-radius: 10px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); margin: 0.5rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 1rem 0; }
+        .stat-card { background: linear-gradient(135deg, #667eea, #764ba2); color: white; padding: 1rem; border-radius: 10px; text-align: center; }
+        .dropdown-select { border: 2px solid #e0e6ed; border-radius: 10px; padding: 0.5rem; }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="main-card">
+            <div class="header">
+                <h1><i class="fas fa-qrcode"></i> Module 3 Part 4 - ArUco Detection & Segmentation</h1>
+                <p>Upload images to detect ArUco markers and perform GrabCut segmentation on detected objects. Supports various dictionary types for optimal marker recognition.</p>
+            </div>
+
+            <!-- Detection Settings -->
+            <div class="section-card">
+                <h4><i class="fas fa-cog"></i> Detection Settings</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="dictionarySelect" class="form-label">ArUco Dictionary:</label>
+                        <select id="dictionarySelect" class="form-select dropdown-select">
+                            <option value="DICT_4X4_50">DICT_4X4_50 (50 markers)</option>
+                            <option value="DICT_4X4_100">DICT_4X4_100 (100 markers)</option>
+                            <option value="DICT_4X4_250">DICT_4X4_250 (250 markers)</option>
+                            <option value="DICT_4X4_1000">DICT_4X4_1000 (1000 markers)</option>
+                            <option value="DICT_5X5_50">DICT_5X5_50 (50 markers)</option>
+                            <option value="DICT_5X5_100">DICT_5X5_100 (100 markers)</option>
+                            <option value="DICT_5X5_250">DICT_5X5_250 (250 markers)</option>
+                            <option value="DICT_5X5_1000">DICT_5X5_1000 (1000 markers)</option>
+                            <option value="DICT_6X6_50">DICT_6X6_50 (50 markers)</option>
+                            <option value="DICT_6X6_100">DICT_6X6_100 (100 markers)</option>
+                            <option value="DICT_6X6_250">DICT_6X6_250 (250 markers)</option>
+                            <option value="DICT_6X6_1000" selected>DICT_6X6_1000 (1000 markers)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Processing Mode:</label><br>
+                        <button id="singleMode" class="btn btn-outline-primary btn-mode active">Single Image</button>
+                        <button id="batchMode" class="btn btn-outline-primary btn-mode">Batch Processing</button>
+                        <button id="hardcodedMode" class="btn btn-outline-success btn-mode">Hardcoded 10 Images</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <!-- Upload Section -->
+                <div class="col-lg-6">
+                    <div class="section-card">
+                        <h4><i class="fas fa-upload"></i> Upload Images</h4>
+                        
+                        <!-- Single Image Upload -->
+                        <div id="singleUpload" class="upload-mode">
+                            <div class="upload-area" id="singleDropArea">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Drag and drop an image here, or click to select</h5>
+                                <p class="text-muted mb-3">Supported formats: PNG, JPG, JPEG</p>
+                                <input type="file" id="singleFileInput" accept="image/*" style="display: none;">
+                                <div id="singlePreview" class="mt-3"></div>
+                            </div>
+                            <button id="singleProcessBtn" class="btn btn-process w-100 mt-3" disabled>
+                                <i class="fas fa-search"></i> Detect ArUco Markers
+                            </button>
+                        </div>
+
+                        <!-- Batch Upload -->
+                        <div id="batchUpload" class="upload-mode" style="display: none;">
+                            <div class="upload-area" id="batchDropArea">
+                                <i class="fas fa-images fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">Drag and drop multiple images here, or click to select</h5>
+                                <p class="text-muted mb-3">Select multiple images for batch processing</p>
+                                <input type="file" id="batchFileInput" accept="image/*" multiple style="display: none;">
+                                <div id="batchPreview" class="mt-3"></div>
+                            </div>
+                            <button id="batchProcessBtn" class="btn btn-process w-100 mt-3" disabled>
+                                <i class="fas fa-cogs"></i> Process Batch
+                            </button>
+                        </div>
+
+                        <!-- Hardcoded Processing -->
+                        <div id="hardcodedUpload" class="upload-mode" style="display: none;">
+                            <div class="upload-area">
+                                <i class="fas fa-flask fa-3x text-info mb-3"></i>
+                                <h5 class="text-info">Process Hardcoded Dataset</h5>
+                                <p class="text-muted">Process 10 predefined images with ArUco markers for testing and demonstration purposes.</p>
+                            </div>
+                            <button id="hardcodedProcessBtn" class="btn btn-process w-100 mt-3">
+                                <i class="fas fa-play"></i> Process Hardcoded Images
+                            </button>
+                        </div>
+
+                        <div class="progress" id="progressBar" style="display: none;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Section -->
+                <div class="col-lg-6">
+                    <div class="section-card">
+                        <h4><i class="fas fa-chart-line"></i> Detection Results</h4>
+                        <div id="results" class="results-area">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-info-circle fa-2x mb-3"></i>
+                                <p>Upload images to see ArUco detection results</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // UI Elements
+        const singleMode = document.getElementById('singleMode');
+        const batchMode = document.getElementById('batchMode');
+        const hardcodedMode = document.getElementById('hardcodedMode');
+        
+        const singleUpload = document.getElementById('singleUpload');
+        const batchUpload = document.getElementById('batchUpload');
+        const hardcodedUpload = document.getElementById('hardcodedUpload');
+        
+        const singleDropArea = document.getElementById('singleDropArea');
+        const batchDropArea = document.getElementById('batchDropArea');
+        const singleFileInput = document.getElementById('singleFileInput');
+        const batchFileInput = document.getElementById('batchFileInput');
+        
+        const singleProcessBtn = document.getElementById('singleProcessBtn');
+        const batchProcessBtn = document.getElementById('batchProcessBtn');
+        const hardcodedProcessBtn = document.getElementById('hardcodedProcessBtn');
+        
+        const resultsDiv = document.getElementById('results');
+        const progressBar = document.getElementById('progressBar');
+        const dictionarySelect = document.getElementById('dictionarySelect');
+
+        // Mode switching
+        function switchMode(mode) {
+            // Update buttons
+            document.querySelectorAll('.btn-mode').forEach(btn => btn.classList.remove('active'));
+            
+            // Hide all upload modes
+            singleUpload.style.display = 'none';
+            batchUpload.style.display = 'none';
+            hardcodedUpload.style.display = 'none';
+            
+            // Show selected mode
+            if (mode === 'single') {
+                singleMode.classList.add('active');
+                singleUpload.style.display = 'block';
+            } else if (mode === 'batch') {
+                batchMode.classList.add('active');
+                batchUpload.style.display = 'block';
+            } else if (mode === 'hardcoded') {
+                hardcodedMode.classList.add('active');
+                hardcodedUpload.style.display = 'block';
+            }
+            
+            clearResults();
+        }
+
+        // Event listeners for mode switching
+        singleMode.addEventListener('click', () => switchMode('single'));
+        batchMode.addEventListener('click', () => switchMode('batch'));
+        hardcodedMode.addEventListener('click', () => switchMode('hardcoded'));
+
+        // File upload handling
+        singleDropArea.addEventListener('click', () => singleFileInput.click());
+        batchDropArea.addEventListener('click', () => batchFileInput.click());
+
+        // Drag and drop for single image
+        singleDropArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            singleDropArea.classList.add('dragover');
+        });
+
+        singleDropArea.addEventListener('dragleave', () => {
+            singleDropArea.classList.remove('dragover');
+        });
+
+        singleDropArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            singleDropArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleSingleFile(files[0]);
+            }
+        });
+
+        singleFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleSingleFile(e.target.files[0]);
+            }
+        });
+
+        function handleSingleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('singlePreview').innerHTML = `
+                    <img src="${e.target.result}" class="result-image" style="max-width: 200px;">
+                    <p class="mt-2 mb-0">${file.name}</p>
+                `;
+                singleDropArea.classList.add('has-file');
+                singleProcessBtn.disabled = false;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Processing functions
+        singleProcessBtn.addEventListener('click', async () => {
+            const file = singleFileInput.files[0];
+            if (!file) return;
+            
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('dictionary', dictionarySelect.value);
+            
+            await processRequest('/module3/part4-aruco-single', formData, 'single');
+        });
+
+        hardcodedProcessBtn.addEventListener('click', async () => {
+            const formData = new FormData();
+            formData.append('dictionary', dictionarySelect.value);
+            
+            await processRequest('/module3/part4-aruco-batch', formData, 'hardcoded');
+        });
+
+        // Process API request
+        async function processRequest(url, formData, mode) {
+            try {
+                showProgress();
+                clearResults();
+                
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                
+                displayResults(result, mode);
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultsDiv.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Error:</strong> ${error.message}
+                    </div>
+                `;
+            } finally {
+                hideProgress();
+            }
+        }
+
+        // Display results
+        function displayResults(result, mode) {
+            if (mode === 'hardcoded') {
+                displayHardcodedResults(result);
+            } else {
+                displaySingleResults(result);
+            }
+        }
+
+        function displayHardcodedResults(result) {
+            const totalMarkers = result.total_markers_detected || 0;
+            const processed = result.processed_images || 0;
+            const total = result.total_images || 0;
+            
+            resultsDiv.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>${processed}/${total}</h3>
+                        <small>Images Processed</small>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${totalMarkers}</h3>
+                        <small>Total Markers</small>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${result.processing_time || 'N/A'}</h3>
+                        <small>Processing Time</small>
+                    </div>
+                    <div class="stat-card">
+                        <h3>${result.dictionary_used || 'DICT_6X6_1000'}</h3>
+                        <small>Dictionary</small>
+                    </div>
+                </div>
+                <div class="alert alert-success mt-3">
+                    <i class="fas fa-check-circle"></i> ${result.message || 'Processing completed successfully!'}
+                </div>
+            `;
+        }
+
+        function displaySingleResults(result) {
+            resultsDiv.innerHTML = `
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <h3>${result.markers_detected || 0}</h3>
+                        <small>Markers Detected</small>
+                    </div>
+                </div>
+                <div class="alert alert-success mt-3">
+                    <i class="fas fa-check-circle"></i> Processing completed!
+                </div>
+            `;
+        }
+
+        // Utility functions
+        function showProgress() {
+            progressBar.style.display = 'block';
+            progressBar.querySelector('.progress-bar').style.width = '100%';
+        }
+
+        function hideProgress() {
+            setTimeout(() => {
+                progressBar.style.display = 'none';
+                progressBar.querySelector('.progress-bar').style.width = '0%';
+            }, 500);
+        }
+
+        function clearResults() {
+            resultsDiv.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-info-circle fa-2x mb-3"></i>
+                    <p>Upload images to see ArUco detection results</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

@@ -92,8 +92,9 @@
           </div>
           <div class="card-body">
             <div class="alert alert-info">
-              <strong><i class="fas fa-info-circle"></i> Requirements:</strong>
-              Upload <strong>at least 4 landscape images</strong> (horizontal orientation) or <strong>8 portrait images</strong> (vertical orientation) for panorama creation.
+              <strong><i class="fas fa-info-circle"></i> Two Assignments Available:</strong><br>
+              <strong>Assignment 1:</strong> Simple OpenCV stitching (at least 2 images)<br>
+              <strong>Assignment 2:</strong> Custom SIFT from scratch with RANSAC (at least 4 images)
             </div>
 
             <form id="stitchForm" enctype="multipart/form-data">
@@ -107,23 +108,23 @@
                 </div>
                 <div class="col-md-6">
                   <div class="mb-3">
-                    <label class="form-label"><i class="fas fa-palette"></i> Blending Mode</label>
-                    <select class="form-select" id="blendMode" name="blend_mode">
-                      <option value="multiband" selected>Multi-band (Best Quality)</option>
-                      <option value="feather">Feather Blending</option>
-                      <option value="simple">Simple Average</option>
+                    <label class="form-label"><i class="fas fa-cogs"></i> Assignment Type</label>
+                    <select class="form-select" id="assignmentType" name="assignment_type">
+                      <option value="custom" selected>Assignment 2: Custom SIFT + RANSAC</option>
+                      <option value="simple">Assignment 1: OpenCV Stitcher</option>
                     </select>
+                    <div class="form-text">Choose which assignment implementation to use</div>
                   </div>
                 </div>
               </div>
 
-              <div class="row">
+              <div class="row" id="advancedOptions">
                 <div class="col-md-6">
                   <div class="mb-3">
                     <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="useCustomSift" name="use_custom_sift" checked>
-                      <label class="form-check-label" for="useCustomSift">
-                        <i class="fas fa-code"></i> Use Custom SIFT Implementation
+                      <input class="form-check-input" type="checkbox" id="comparisonMode" name="comparison_mode">
+                      <label class="form-check-label" for="comparisonMode">
+                        <i class="fas fa-balance-scale"></i> Enable SIFT Comparison
                       </label>
                     </div>
                   </div>
@@ -131,9 +132,9 @@
                 <div class="col-md-6">
                   <div class="mb-3">
                     <div class="form-check">
-                      <input class="form-check-input" type="checkbox" id="comparisonMode" name="comparison_mode">
-                      <label class="form-check-label" for="comparisonMode">
-                        <i class="fas fa-balance-scale"></i> Enable SIFT Comparison
+                      <input class="form-check-input" type="checkbox" id="showDetails" name="show_details" checked>
+                      <label class="form-check-label" for="showDetails">
+                        <i class="fas fa-info"></i> Show Algorithm Details
                       </label>
                     </div>
                   </div>
@@ -205,9 +206,11 @@
         if (existingFeedback) existingFeedback.remove();
         
         const feedback = document.createElement('div');
-        feedback.className = 'alert alert-success mt-2 file-feedback';
-        feedback.innerHTML = `<i class="fas fa-check-circle"></i> Selected ${fileCount} images`;
+        const assignmentType = document.getElementById('assignmentType').value;
+        const isCustom = assignmentType === 'custom';
+        
         e.target.parentNode.appendChild(feedback);
+        validateFileCount(fileCount, isCustom);
       }
     });
 
@@ -222,15 +225,48 @@
       if (feedback) feedback.remove();
     });
 
+    // Assignment type change handler
+    document.getElementById('assignmentType').addEventListener('change', function() {
+      const isCustom = this.value === 'custom';
+      const files = document.getElementById('images').files;
+      
+      // Show/hide advanced options based on assignment type
+      const advancedOptions = document.getElementById('advancedOptions');
+      advancedOptions.style.display = isCustom ? 'block' : 'none';
+      
+      // Update minimum file requirements
+      if (files.length > 0) {
+        validateFileCount(files.length, isCustom);
+      }
+    });
+
+    // Validate file count based on assignment type
+    function validateFileCount(count, isCustom) {
+      const minFiles = isCustom ? 4 : 2;
+      const feedback = document.querySelector('.file-feedback');
+      
+      if (feedback) {
+        if (count < minFiles) {
+          feedback.className = 'alert alert-warning mt-2 file-feedback';
+          feedback.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Need at least ${minFiles} images for this assignment`;
+        } else {
+          feedback.className = 'alert alert-success mt-2 file-feedback';
+          feedback.innerHTML = `<i class="fas fa-check-circle"></i> Selected ${count} images - Ready!`;
+        }
+      }
+    }
+
     // Form submission handler
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const files = document.getElementById('images').files;
-      const minFiles = 4; // Can be adjusted based on orientation
+      const assignmentType = document.getElementById('assignmentType').value;
+      const isCustom = assignmentType === 'custom';
+      const minFiles = isCustom ? 4 : 2;
       
       if (files.length < minFiles) {
-        alert(`Please upload at least ${minFiles} images for panorama stitching`);
+        alert(`Please upload at least ${minFiles} images for ${isCustom ? 'Assignment 2 (Custom SIFT)' : 'Assignment 1 (Simple Stitching)'}`);
         return;
       }
 
@@ -239,18 +275,32 @@
       for (let i = 0; i < files.length; i++) {
         formData.append('images', files[i]);
       }
-      formData.append('blend_mode', document.getElementById('blendMode').value);
-      formData.append('use_custom_sift', document.getElementById('useCustomSift').checked);
-      formData.append('comparison_mode', document.getElementById('comparisonMode').checked);
+      
+      if (isCustom) {
+        formData.append('comparison_mode', document.getElementById('comparisonMode').checked);
+        formData.append('show_details', document.getElementById('showDetails').checked);
+      }
+
+      // Determine endpoint and API base
+      let endpoint, apiBase;
+      if (isCustom) {
+        endpoint = '/api/stitch-custom';
+        apiBase = API_BASE; // Use Module 4 API
+      } else {
+        endpoint = '/api/stitch-simple';
+        apiBase = window.location.origin; // Use main app API
+      }
+      
+      const algorithmName = isCustom ? 'Custom SIFT + RANSAC' : 'OpenCV Stitcher';
 
       // Show progress
-      showProgress('Initializing...');
+      showProgress(`Initializing ${algorithmName}...`);
       
       try {
         // Update progress during processing
-        updateProgress(25, 'Processing images...');
+        updateProgress(25, `Running ${algorithmName}...`);
         
-        const response = await fetch(`${API_BASE}/api/stitch`, {
+        const response = await fetch(`${apiBase}${endpoint}`, {
           method: 'POST',
           body: formData
         });
@@ -266,7 +316,7 @@
         updateProgress(100, 'Complete!');
         setTimeout(() => {
           hideProgress();
-          displayResults(result);
+          displayResults(result, isCustom);
         }, 500);
         
       } catch (error) {
@@ -301,15 +351,17 @@
       resultsDiv.style.display = 'block';
     }
 
-    function displayResults(result) {
+    function displayResults(result, isCustomAssignment = true) {
       const stats = result.statistics || {};
       const quality = result.quality_metrics || {};
+      const assignmentInfo = isCustomAssignment ? 'Assignment 2: Custom SIFT + RANSAC' : 'Assignment 1: OpenCV Stitcher';
       
       resultsDiv.innerHTML = `
         <div class="col-12">
           <div class="card">
             <div class="card-header bg-success text-white">
               <h3 class="mb-0"><i class="fas fa-check-circle"></i> Panorama Created Successfully</h3>
+              <p class="mb-0 mt-1"><small>${assignmentInfo}</small></p>
             </div>
             <div class="card-body">
               <div class="row">
@@ -334,17 +386,30 @@
                     </div>
                   </div>
                   
-                  ${quality.overall_quality ? `
+                  ${stats.algorithm ? `
                   <div class="card mb-3">
                     <div class="card-body">
-                      <h5>Quality Score</h5>
-                      <div class="quality-indicator text-${getQualityColor(quality.overall_quality)}">
-                        ${(quality.overall_quality * 100).toFixed(1)}%
+                      <h6><i class="fas fa-cog"></i> Algorithm</h6>
+                      <p class="mb-0 small">${stats.algorithm}</p>
+                    </div>
+                  </div>
+                  ` : ''}
+                  
+                  ${quality.sift_implementation ? `
+                  <div class="card mb-3">
+                    <div class="card-body">
+                      <h6><i class="fas fa-code"></i> Implementation</h6>
+                      <p class="mb-0 small">${quality.sift_implementation}</p>
+                      ${quality.assignment_compliance ? `
+                      <div class="mt-2">
+                        <span class="badge ${quality.assignment_compliance.sift_from_scratch ? 'bg-success' : 'bg-warning'}">
+                          ${quality.assignment_compliance.sift_from_scratch ? '✓' : '✗'} SIFT from Scratch
+                        </span>
+                        <span class="badge ${quality.assignment_compliance.ransac_optimization ? 'bg-success' : 'bg-warning'}">
+                          ${quality.assignment_compliance.ransac_optimization ? '✓' : '✗'} RANSAC Optimization
+                        </span>
                       </div>
-                      <div class="progress mt-2">
-                        <div class="progress-bar bg-${getQualityColor(quality.overall_quality)}" 
-                             style="width: ${quality.overall_quality * 100}%"></div>
-                      </div>
+                      ` : ''}
                     </div>
                   </div>
                   ` : ''}

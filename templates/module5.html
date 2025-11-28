@@ -33,6 +33,9 @@
                                     Upload NPZ Mask File
                                 </label>
                             </div>
+                            <div id="generate-mask-section" style="margin-top:10px;">
+                                <button id="generateMaskBtn" class="btn btn-info">Generate Dummy NPZ Mask</button>
+                            </div>
                         </div>
                         <div id="upload-section" style="display:none;">
                             <label for="sam2file" class="form-label">Upload SAM2 NPZ Mask:</label>
@@ -183,6 +186,8 @@ function clearSelection() {
 const dummyMaskRadio = document.getElementById('dummyMask');
 const uploadMaskRadio = document.getElementById('uploadMask');
 const uploadSection = document.getElementById('upload-section');
+const generateMaskBtn = document.getElementById('generateMaskBtn');
+const generateMaskSection = document.getElementById('generate-mask-section');
 
 if (dummyMaskRadio) {
     dummyMaskRadio.addEventListener('change', () => {
@@ -200,6 +205,42 @@ if (uploadMaskRadio) {
             statusSpan.textContent = '📁 Upload your own SAM2 NPZ mask file';
         }
     });
+}
+
+modeSelect.addEventListener('change', () => {
+    selectedMode = modeSelect.value;
+    document.getElementById('sam2-upload').style.display = selectedMode === 'sam2' ? 'block' : 'none';
+    if (generateMaskSection) generateMaskSection.style.display = selectedMode === 'sam2' ? 'block' : 'none';
+    
+    // Show selection canvas and hint for markerless and SAM2 modes
+    if (selectedMode === 'markerless' || selectedMode === 'sam2') {
+        selection.style.display = 'block';
+        selectionHint.style.display = 'block';
+        statusSpan.textContent = '🖱️ ' + selectedMode + ' mode - click and drag to select object';
+    } else {
+        selection.style.display = 'none';
+        selectionHint.style.display = 'none';
+        userBoundingBox = null; // Reset selection
+        clearSelection();
+    }
+});
+
+if (generateMaskBtn) {
+    generateMaskBtn.onclick = async () => {
+        const statusSpan = document.getElementById('status');
+        statusSpan.textContent = '⏳ Generating dummy NPZ mask...';
+        try {
+            const res = await fetch('/module5/api/sam2/generate_mask', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                statusSpan.textContent = `✅ Dummy mask generated: ${data.path} (${data.shape})`;
+            } else {
+                statusSpan.textContent = `❌ Failed to generate mask: ${data.error}`;
+            }
+        } catch (err) {
+            statusSpan.textContent = `❌ Error: ${err.message}`;
+        }
+    };
 }
 
 // Mouse selection functions for markerless tracking

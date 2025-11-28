@@ -1,6 +1,13 @@
-# Module 5 — Real-time Object Tracker
+# Modules 5 & 6 — Real-time Object Tracker
 
 A comprehensive real-time object tracking system with multiple tracking algorithms and an interactive web interface.
+
+## Demo Video
+## Part 1
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt1_rec.gif)
+
+## Part 2
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt2_rec.gif)
 
 ## 🎯 Overview
 

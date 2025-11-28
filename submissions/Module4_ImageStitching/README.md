@@ -1,8 +1,11 @@
 # Module 4: Advanced Image Stitching with SIFT Implementation
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![OpenCV](https://img.shields.io/badge/OpenCV-4.5+-green.svg)](https://opencv.org/)
-[![Flask](https://img.shields.io/badge/Flask-2.0+-red.svg)](https://flask.palletsprojects.com/)
+## Demo Video
+## Part 1
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod4_pt1_rec_final.gif)
+
+## Part 2
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod4_pt2_rec.gif)
 
 A comprehensive implementation of image stitching featuring a complete **SIFT (Scale-Invariant Feature Transform)** algorithm built from scratch, enhanced **RANSAC** optimization, and advanced blending techniques. This module demonstrates both theoretical understanding and practical implementation of computer vision panorama creation.
 
@@ -326,6 +329,3 @@ Mobile panorama comparison
 ---
 
 **Author**: Cecilia Muniz Siqueira  
-**Course**: Computer Vision Module 4  
-**Date**: November 2025  
-**License**: MIT
