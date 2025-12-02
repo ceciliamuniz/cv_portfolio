@@ -25,5 +25,33 @@ Thumbs.db
 *.tmp
 *.temp
 
+# Large output folders and files
+submissions/Module*/outputs/
+outputs/
+processed-*
+debug_*
+template_matching_result.*
+
+# Large image and media files
+*.png
+*.jpg
+*.jpeg
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.zip
+*.npy
+*.pt
+*.h5
+*.tflite
+
+# Allow essential demo recordings
+!screen_recordings/*.gif
+
+# Allow essential template images (small ones)
+!templates/static/
+!static/
+
 # Unused demo recordings
 screen_recordings/mod7_pt1_rec1.gif
