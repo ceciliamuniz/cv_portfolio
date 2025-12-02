@@ -24,6 +24,27 @@
         }
         .header-module3 h1 { font-size: 2.5em; margin-bottom: 10px; }
         .header-module3 p { font-size: 1.2em; opacity: 0.9; }
+        .demo-box {
+            background: #e3f2fd;
+            border: 1px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px;
+        }
+        .demo-box h6 {
+            color: #1976d2;
+            margin-bottom: 15px;
+        }
+        .demo-box a {
+            color: #1976d2;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 15px;
+            margin-bottom: 5px;
+        }
+        .demo-box a:hover {
+            text-decoration: underline;
+        }
         .nav-pills {
             display: flex;
             justify-content: center;
@@ -81,6 +102,33 @@
             <h1>🎯 Module 3: Advanced Image Analysis</h1>
             <p>Gradient Computation, Edge/Corner Detection & Object Segmentation</p>
         </div>
+        
+        <!-- Demo Videos Box -->
+        <div class="demo-box">
+            <h6><i class="fas fa-video me-2"></i>Demo Videos</h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt1_rec.gif" target="_blank">
+                        <i class="fas fa-play-circle me-1"></i>Part 1: Gradients
+                    </a><br>
+                    <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt2_rec.gif" target="_blank">
+                        <i class="fas fa-play-circle me-1"></i>Part 2: Keypoints
+                    </a><br>
+                    <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt3_rec.gif" target="_blank">
+                        <i class="fas fa-play-circle me-1"></i>Part 3: Boundaries
+                    </a>
+                </div>
+                <div class="col-md-6">
+                    <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt4_rec.gif" target="_blank">
+                        <i class="fas fa-play-circle me-1"></i>Part 4: ArUco
+                    </a><br>
+                    <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt5_rec.gif" target="_blank">
+                        <i class="fas fa-play-circle me-1"></i>Part 5: SAM2
+                    </a>
+                </div>
+            </div>
+        </div>
+        
         <div class="nav-pills">
             <a href="{{ url_for('module3.part1') }}" class="nav-pill">Part 1: Gradient & LoG</a>
             <a href="{{ url_for('module3.part2') }}" class="nav-pill">Part 2: Keypoints</a>

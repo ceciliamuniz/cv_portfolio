@@ -106,6 +106,14 @@
     </nav>
 
     <div class="container-fluid mt-4">
+        <!-- Demo Video Box -->
+        <div class="alert alert-primary mb-4">
+            <h6><i class="fas fa-video me-2"></i>Demo Video</h6>
+            <a href="https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod7_pt3_rec.gif" target="_blank" class="text-decoration-none">
+                <i class="fas fa-play-circle me-1"></i>Module 7 Part 3: Pose Tracking Demo
+            </a>
+        </div>
+        
         <div class="row">
             <!-- Main Video Feed -->
             <div class="col-lg-8">
@@ -125,35 +133,43 @@
                     </div>
                 </div>
 
-                <!-- Image Upload Section -->
+                <!-- Assignment Requirements -->
                 <div class="card mt-4">
-                    <div class="card-header bg-success text-white">
+                    <div class="card-header bg-info text-white">
                         <h5 class="mb-0">
-                            <i class="fas fa-upload"></i> Static Image Processing
+                            <i class="fas fa-info-circle"></i> Assignment Requirements
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="mode-selector">
-                            <label class="form-label">Processing Mode:</label>
-                            <select id="processingMode" class="form-select">
-                                <option value="holistic">Holistic (Pose + Hands + Face)</option>
-                                <option value="pose_only">Pose Only</option>
-                                <option value="hands_only">Hands Only</option>
-                            </select>
+                        <div class="alert alert-success" role="alert">
+                            <h6><i class="fas fa-check-circle"></i> Real-time Pose Estimation & Hand Tracking</h6>
+                            <ul class="mb-0">
+                                <li><strong>✅ Visual Output:</strong> Live video feed shows pose landmarks overlay</li>
+                                <li><strong>✅ CSV Data Export:</strong> All pose/hand coordinates saved with timestamps</li>
+                                <li><strong>✅ MediaPipe Integration:</strong> Professional pose estimation framework</li>
+                                <li><strong>✅ Real-time Processing:</strong> Live webcam feed with landmark tracking</li>
+                            </ul>
                         </div>
                         
-                        <div class="mb-3">
-                            <label for="imageUpload" class="form-label">Upload Image for Analysis</label>
-                            <input type="file" class="form-control" id="imageUpload" accept="image/*">
-                        </div>
-                        
-                        <button id="processImageBtn" class="btn btn-success" disabled>
-                            <i class="fas fa-cog"></i> Process Image
-                        </button>
-                        
-                        <div id="imageResult" class="mt-3" style="display: none;">
-                            <h6>Processed Result:</h6>
-                            <img id="processedImage" class="img-fluid" style="max-height: 400px;">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>📊 Data Captured:</h6>
+                                <ul class="small">
+                                    <li>33 Body pose landmarks</li>
+                                    <li>21 points per hand (42 total)</li>
+                                    <li>X, Y, Z coordinates + visibility</li>
+                                    <li>Timestamped frame data</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>🎯 Usage Instructions:</h6>
+                                <ol class="small">
+                                    <li>Click "Start Recording"</li>
+                                    <li>Perform gestures/poses</li>
+                                    <li>Click "Stop Recording"</li>
+                                    <li>Export CSV for analysis</li>
+                                </ol>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -259,10 +275,6 @@
         const systemStatus = document.getElementById('systemStatus');
         const liveDataPreview = document.getElementById('liveDataPreview');
         const landmarkInfo = document.getElementById('landmarkInfo');
-        const imageUpload = document.getElementById('imageUpload');
-        const processImageBtn = document.getElementById('processImageBtn');
-        const imageResult = document.getElementById('imageResult');
-        const processedImage = document.getElementById('processedImage');
         
         // Initialize application
         document.addEventListener('DOMContentLoaded', function() {
@@ -282,11 +294,7 @@
             // System testing
             document.getElementById('testSystemBtn').addEventListener('click', testSystem);
             
-            // Image processing
-            imageUpload.addEventListener('change', function() {
-                processImageBtn.disabled = !this.files.length;
-            });
-            processImageBtn.addEventListener('click', processImage);
+            // Removed static image processing - focus on real-time tracking only
             
             // UI toggles
             document.getElementById('toggleDataPreview').addEventListener('click', function() {
@@ -404,54 +412,7 @@
             }
         }
         
-        async function processImage() {
-            try {
-                const file = imageUpload.files[0];
-                if (!file) return;
-                
-                const formData = new FormData();
-                formData.append('image', file);
-                formData.append('mode', document.getElementById('processingMode').value);
-                
-                processImageBtn.disabled = true;
-                processImageBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                
-                const response = await fetch('/module7/pose/api/process_frame', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    // Display processed image
-                    processedImage.src = result.annotated_image;
-                    imageResult.style.display = 'block';
-                    
-                    // Update live data preview
-                    lastProcessedData = result.pose_data;
-                    updateDataPreview(result.pose_data);
-                    
-                    // Show detection status
-                    const landmarks = result.landmarks_detected;
-                    let statusHtml = '<strong>Detected:</strong> ';
-                    if (landmarks.pose) statusHtml += '<span class="badge bg-success">Pose</span> ';
-                    if (landmarks.left_hand) statusHtml += '<span class="badge bg-info">Left Hand</span> ';
-                    if (landmarks.right_hand) statusHtml += '<span class="badge bg-info">Right Hand</span> ';
-                    if (landmarks.face) statusHtml += '<span class="badge bg-warning">Face</span> ';
-                    
-                    exportStatus.innerHTML = statusHtml;
-                } else {
-                    throw new Error(result.error || 'Processing failed');
-                }
-            } catch (error) {
-                console.error('Error processing image:', error);
-                alert('Failed to process image: ' + error.message);
-            } finally {
-                processImageBtn.disabled = false;
-                processImageBtn.innerHTML = '<i class="fas fa-cog"></i> Process Image';
-            }
-        }
+        // Static image processing removed - focusing on real-time tracking per assignment requirements
         
         async function testSystem() {
             try {
