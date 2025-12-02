@@ -4,13 +4,13 @@ A comprehensive real-time object tracking system with multiple tracking algorith
 
 ## Demo Video
 ## Part 1
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt1_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod5_pt1_rec.gif)
 
 ## Part 2
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt2_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod5_pt2_rec.gif)
 
 ## Evaluation Table
-![Evaluation Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_eval_rec.gif)
+![Evaluation Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod5_eval_rec.gif)
 
 ## 🎯 Overview
 
@@ -27,19 +27,6 @@ This module implements three different object tracking approaches:
 - **Visual Feedback**: Real-time bounding boxes and tracking status indicators
 - **RESTful API**: Backend endpoints for programmatic access
 
-## 🚀 Demo Videos
-
-### Part 1: Marker-based Tracking
-![Marker-based Tracking Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt1_rec.gif)
-*Demonstrates detection and tracking of ArUco markers in real-time*
-
-### Part 2: Markerless Tracking
-![Markerless Tracking Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt2_rec.gif)
-*Shows interactive object selection and OpenCV-based tracking*
-
-### Part 3: SAM2 Segmentation
-![SAM2 Tracking Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt3_rec.gif)
-*Advanced segmentation-based tracking with precise object boundaries*
 
 ## 🛠️ Technical Implementation
 

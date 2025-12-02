@@ -2,10 +2,10 @@
 
 ## Demo Video
 ## Part 1: Stereo Size Estimation
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod7_pt1_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod7_pt1_rec.gif)
 
 ## Part 3: Pose Tracking
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod7_pt3_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod7_pt3_rec.gif)
 
 A comprehensive computer vision system implementing **calibrated stereo vision** for accurate 3D object measurement and **real-time pose tracking** using MediaPipe. This module demonstrates advanced 3D computer vision techniques with practical applications in measurement and human motion analysis.
 
