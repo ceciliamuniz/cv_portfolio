@@ -9,6 +9,9 @@ A comprehensive real-time object tracking system with multiple tracking algorith
 ## Part 2
 ![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_pt2_rec.gif)
 
+## Evaluation Table
+![Evaluation Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod5_eval_rec.gif)
+
 ## 🎯 Overview
 
 This module implements three different object tracking approaches:
