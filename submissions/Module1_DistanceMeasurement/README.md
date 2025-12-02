@@ -5,7 +5,7 @@ This application demonstrates real-world distance measurement using **perspectiv
 
 ## Demo Video
 
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod1_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod1_rec.gif)
 
 *Live demonstration of the distance measurement application showing image upload, point selection, and real-time distance calculation.*
 

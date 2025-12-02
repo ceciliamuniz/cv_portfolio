@@ -4,19 +4,19 @@ Complete implementation of image analysis algorithms for gradient computation, e
 
 ## Demo Video
 ## Part 1
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt1_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod3_pt1_rec.gif)
 
 ## Part 2
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt2_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod3_pt2_rec.gif)
 
 ## Part 3
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt3_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod3_pt3_rec.gif)
 
 ## Part 4
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt4_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod3_pt4_rec.gif)
 
 ## Part 5
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod3_pt5_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod3_pt5_rec.gif)
 
 ## 📋 Requirements Implemented
 

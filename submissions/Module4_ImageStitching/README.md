@@ -2,10 +2,10 @@
 
 ## Demo Video
 ## Part 1
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod4_pt1_rec_final.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod4_pt1_rec_final.gif)
 
 ## Part 2
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod4_pt2_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod4_pt2_rec.gif)
 
 A comprehensive implementation of image stitching featuring a complete **SIFT (Scale-Invariant Feature Transform)** algorithm built from scratch, enhanced **RANSAC** optimization, and advanced blending techniques. This module demonstrates both theoretical understanding and practical implementation of computer vision panorama creation.
 

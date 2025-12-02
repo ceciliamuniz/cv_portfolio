@@ -4,10 +4,10 @@ A standalone Flask web application implementing advanced computer vision techniq
 
 ## Demo Video
 ## Part 1
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod2_pt1_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod2_pt1_rec.gif)
 
 ## Part 2
-![Application Demo](https://github.com/ceciliamuniz/cv_portfolio/blob/main/screen_recordings/mod2_pt2_rec.gif)
+![Application Demo](https://github.com/ceciliamuniz/cv_portfolio_recordings/blob/main/screen_recordings/mod2_pt2_rec.gif)
 
 *Live demonstration of the template matching and blur recovery application showing image upload, template detection with confidence scoring, and FFT-based blur recovery with PSNR metrics.*
 
